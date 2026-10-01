@@ -1,7 +1,11 @@
 package com.pmr.admin;
 
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.media.AudioDeviceInfo;
+import android.media.AudioManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -13,18 +17,15 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран настроек Android Link PMR V1.0.
+/* Экран настроек Android Link PMR V1.1.
  *
- * Основное:
- *   - VoxView (индикатор + две метки);
- *   - обновление состояния VOX каждые 100 мс;
- *   - кнопка «СОХРАНИТЬ» сохраняет все настройки (VOX + регистрационные + пароль).
+ * Изменения V1.1:
+ *   - убрана галочка «Требовать пароль» и блок смены пароля (по решению пользователя);
+ *   - убрана кнопка btnSaveVox — одна кнопка СОХРАНИТЬ на всё;
+ *   - добавлен блок USB-аудио: статус + название;
+ *   - обновление UI раз в 100 мс.
  */
 public class SettingsActivity extends AppCompatActivity {
-
-    private EditText passCurrent;
-    private EditText passNew;
-    private EditText passConfirm;
 
     private EditText regMailIndex;
     private EditText regPChannel;
@@ -36,12 +37,14 @@ public class SettingsActivity extends AppCompatActivity {
 
     private VoxView voxView;
     private TextView voxStateText;
+    private TextView usbStatusText;
 
     private Handler handler;
     private final Runnable uiLoop = new Runnable() {
         @Override
         public void run() {
             refreshVoxUi();
+            refreshUsbUi();
             handler.postDelayed(this, 100);
         }
     };
@@ -53,10 +56,6 @@ public class SettingsActivity extends AppCompatActivity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_settings);
 
-        passCurrent = findViewById(R.id.passCurrent);
-        passNew     = findViewById(R.id.passNew);
-        passConfirm = findViewById(R.id.passConfirm);
-
         regMailIndex = findViewById(R.id.regMailIndex);
         regPChannel  = findViewById(R.id.regPChannel);
         regPriznak   = findViewById(R.id.regPriznak);
@@ -67,6 +66,7 @@ public class SettingsActivity extends AppCompatActivity {
 
         voxView = findViewById(R.id.voxView);
         voxStateText = findViewById(R.id.voxStateText);
+        usbStatusText = findViewById(R.id.usbStatusText);
 
         Button saveBtn = findViewById(R.id.btnSaveSettings);
         if (saveBtn != null) saveBtn.setOnClickListener(v -> saveSettings());
@@ -76,9 +76,6 @@ public class SettingsActivity extends AppCompatActivity {
             Intent i = new Intent(SettingsActivity.this, LogActivity.class);
             startActivity(i);
         });
-
-        Button saveVoxBtn = findViewById(R.id.btnSaveVox);
-        if (saveVoxBtn != null) saveVoxBtn.setOnClickListener(v -> saveVox());
 
         loadSettings();
 
@@ -92,7 +89,6 @@ public class SettingsActivity extends AppCompatActivity {
         if (handler != null) handler.removeCallbacks(uiLoop);
     }
 
-    /* Обновление UI VOX — 10 раз в секунду. */
     private void refreshVoxUi() {
         if (voxView == null) return;
         if (PmrService.voxEngine != null) {
@@ -108,11 +104,40 @@ public class SettingsActivity extends AppCompatActivity {
         }
     }
 
+    /* Проверка наличия USB-аудио. */
+    private void refreshUsbUi() {
+        if (usbStatusText == null) return;
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            usbStatusText.setText("USB-аудио: API < 23, проверка недоступна");
+            return;
+        }
+        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (am == null) {
+            usbStatusText.setText("USB-аудио: AudioManager недоступен");
+            return;
+        }
+        AudioDeviceInfo[] devices = am.getDevices(AudioManager.GET_DEVICES_ALL);
+        String name = null;
+        for (AudioDeviceInfo d : devices) {
+            int t = d.getType();
+            if (t == AudioDeviceInfo.TYPE_USB_DEVICE
+                    || t == AudioDeviceInfo.TYPE_USB_HEADSET) {
+                CharSequence pn = d.getProductName();
+                name = (pn != null) ? pn.toString() : "USB-аудио";
+                break;
+            }
+        }
+        if (name != null) {
+            usbStatusText.setText("USB-аудио: ПОДКЛЮЧЕНО — " + name);
+        } else {
+            usbStatusText.setText("USB-аудио: НЕ ПОДКЛЮЧЕНО (используется встроенное)");
+        }
+    }
+
     private void loadSettings() {
         SharedPreferences sp = getSharedPreferences(
                 PasswordActivity.PREFS, MODE_PRIVATE);
 
-        /* Регистрационные. */
         if (regMailIndex != null)
             regMailIndex.setText(sp.getString(
                     PasswordActivity.KEY_MY_MAIL_INDEX,
@@ -142,7 +167,6 @@ public class SettingsActivity extends AppCompatActivity {
                     PasswordActivity.KEY_CITY,
                     PasswordActivity.DEFAULT_CITY));
 
-        /* VOX. */
         if (voxView != null) {
             int myVox = sp.getInt(PasswordActivity.KEY_MY_VOX,
                     PasswordActivity.DEFAULT_MY_VOX);
@@ -153,50 +177,11 @@ public class SettingsActivity extends AppCompatActivity {
         }
     }
 
-    /* Сохранить только VOX. */
-    private void saveVox() {
-        if (voxView == null) return;
-        SharedPreferences sp = getSharedPreferences(
-                PasswordActivity.PREFS, MODE_PRIVATE);
-        sp.edit()
-                .putInt(PasswordActivity.KEY_MY_VOX, voxView.getMyVox())
-                .putInt(PasswordActivity.KEY_VOX_PAUSE, voxView.getVoxPause())
-                .apply();
-        Toast.makeText(this, "VOX сохранён", Toast.LENGTH_SHORT).show();
-    }
-
-    /* Сохранить всё. */
+    /* Сохранить всё одной кнопкой. */
     private void saveSettings() {
         SharedPreferences sp = getSharedPreferences(
                 PasswordActivity.PREFS, MODE_PRIVATE);
 
-        /* Смена пароля. */
-        String cur = sp.getString(PasswordActivity.KEY_PASSWORD,
-                PasswordActivity.DEFAULT_PASSWORD);
-        String enteredCur = passCurrent.getText().toString();
-        String newPass = passNew.getText().toString();
-        String confirmPass = passConfirm.getText().toString();
-
-        if (!enteredCur.isEmpty() || !newPass.isEmpty() || !confirmPass.isEmpty()) {
-            if (!cur.equals(enteredCur)) {
-                Toast.makeText(this, R.string.settings_error_current,
-                        Toast.LENGTH_SHORT).show();
-                return;
-            }
-            if (newPass.isEmpty()) {
-                Toast.makeText(this, R.string.settings_error_empty,
-                        Toast.LENGTH_SHORT).show();
-                return;
-            }
-            if (!newPass.equals(confirmPass)) {
-                Toast.makeText(this, R.string.settings_error_mismatch,
-                        Toast.LENGTH_SHORT).show();
-                return;
-            }
-            sp.edit().putString(PasswordActivity.KEY_PASSWORD, newPass).apply();
-        }
-
-        /* VOX. */
         if (voxView != null) {
             sp.edit()
                     .putInt(PasswordActivity.KEY_MY_VOX, voxView.getMyVox())
@@ -204,7 +189,6 @@ public class SettingsActivity extends AppCompatActivity {
                     .apply();
         }
 
-        /* Регистрационные. */
         String myMailIndex = (regMailIndex != null)
                 ? regMailIndex.getText().toString().trim() : "";
         String myPChannel = (regPChannel != null)
@@ -235,16 +219,11 @@ public class SettingsActivity extends AppCompatActivity {
         if (!city.isEmpty()) sp.edit().putString(
                 PasswordActivity.KEY_CITY, city).apply();
 
-        /* Применить настройки. */
         if (PmrService.pmrSocket != null) {
             PmrService.pmrSocket.reloadFromPrefs(this);
         }
 
         Toast.makeText(this, R.string.settings_saved,
                 Toast.LENGTH_SHORT).show();
-
-        passCurrent.setText("");
-        passNew.setText("");
-        passConfirm.setText("");
     }
 }

@@ -10,8 +10,11 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран ввода пароля V1.0 Android Link PMR.
- * Добавлены ключи VOX.
+/* Экран ввода пароля Android Link PMR V1.1.
+ *
+ * Изменения V1.1:
+ *   - DEFAULT_MY_VOX = 400;
+ *   - DEFAULT_VOX_PAUSE = 15.
  */
 public class PasswordActivity extends AppCompatActivity {
 
@@ -31,7 +34,6 @@ public class PasswordActivity extends AppCompatActivity {
     public static final String KEY_CALLSIGN      = "callsign";
     public static final String KEY_CITY          = "city";
 
-    /* VOX. */
     public static final String KEY_MY_VOX     = "my_vox";
     public static final String KEY_VOX_PAUSE  = "vox_pause";
 
@@ -47,8 +49,7 @@ public class PasswordActivity extends AppCompatActivity {
     public static final String DEFAULT_CALLSIGN      = "RW6HHL";
     public static final String DEFAULT_CITY          = "Мин-Воды";
 
-    /* VOX по умолчанию. */
-    public static final int DEFAULT_MY_VOX    = 40;
+    public static final int DEFAULT_MY_VOX    = 400;
     public static final int DEFAULT_VOX_PAUSE = 15;
 
     private EditText passInput;

@@ -6,26 +6,18 @@ import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 
-/* VOX-движок Android Link PMR V1.0.
+/* VOX-движок Android Link PMR V1.1.
  *
- * Задача: автоматически определять наличие звука с микрофона и
- * отправлять его на сервер через PmrSocket — без кнопки PTT.
- *
- * Логика:
- *   - слушает микрофон непрерывно;
- *   - считает RMS-амплитуду каждого буфера PCM 16 бит;
- *   - если RMS >= My_Vox — начинается передача (startSending);
- *   - если RMS < My_Vox и держится тихо дольше vox_pause (в единицах по 20 мс) —
- *     передача останавливается (stopSending).
- *
- * Параметры (в SharedPreferences):
- *   My_Vox    = 0..500, 0 = VOX выключен;
- *   vox_pause = 1..500, длительность тишины до остановки передачи.
+ * Изменения V1.1:
+ *   - шкала RMS 0..1000 (было 0..500);
+ *   - масштабирование /32.0 (было /64.0);
+ *   - диагностический лог VoxEngine раз в секунду;
+ *   - при неактивном VOX всё равно обновляется lastRms.
  */
 public class VoxEngine {
 
     private static final int SAMPLE_RATE = 16000;
-    private static final int BUF_ELEMENTS = 320;                 // 20 мс @ 16 кГц
+    private static final int BUF_ELEMENTS = 320;
     private static final int BYTES_PER_ELEM = 2;
     private static final int BUF_SIZE = BUF_ELEMENTS * BYTES_PER_ELEM;
 
@@ -37,7 +29,6 @@ public class VoxEngine {
     private Thread voxThread = null;
     private volatile boolean running = false;
 
-    /* Текущее состояние VOX. */
     private volatile boolean txActive = false;
     private volatile int lastRms = 0;
 
@@ -49,7 +40,6 @@ public class VoxEngine {
     public boolean isTxActive() { return txActive; }
     public int getLastRms()     { return lastRms; }
 
-    /* Запуск VOX-потока. */
     public void start() {
         if (running) return;
 
@@ -61,6 +51,7 @@ public class VoxEngine {
                     AudioFormat.ENCODING_PCM_16BIT,
                     BUF_SIZE * 2);
             recorder.startRecording();
+            AppLog.add("VoxEngine: AudioRecord init OK");
         } catch (Exception e) {
             AppLog.add("VoxEngine: ошибка AudioRecord — " + e);
             recorder = null;
@@ -86,11 +77,12 @@ public class VoxEngine {
         AppLog.add("VoxEngine: поток остановлен");
     }
 
-    /* Главный цикл — читает микрофон, считает RMS, управляет передачей. */
+    /* Главный цикл. Раз в секунду пишем диагностику в AppLog. */
     private void loop() {
         byte[] pcm16 = new byte[BUF_SIZE];
         byte[] g711buf = new byte[BUF_ELEMENTS];
         int silentTicks = 0;
+        int diagCounter = 0;
 
         while (running) {
             int read;
@@ -104,7 +96,6 @@ public class VoxEngine {
             int rms = calcRms(pcm16, read);
             lastRms = rms;
 
-            /* Читаем настройки VOX из SharedPreferences. */
             SharedPreferences sp = appCtx.getSharedPreferences(
                     PasswordActivity.PREFS, Context.MODE_PRIVATE);
             int myVox = sp.getInt(PasswordActivity.KEY_MY_VOX,
@@ -112,55 +103,54 @@ public class VoxEngine {
             int voxPause = sp.getInt(PasswordActivity.KEY_VOX_PAUSE,
                     PasswordActivity.DEFAULT_VOX_PAUSE);
 
-            /* VOX выключен — не передаём. */
+            /* Диагностический лог — раз в секунду (50 тиков по 20 мс). */
+            diagCounter++;
+            if (diagCounter >= 50) {
+                AppLog.add("VoxEngine: rms=" + rms + ", vox=" + myVox
+                        + ", tx=" + txActive);
+                diagCounter = 0;
+            }
+
             if (myVox <= 0) {
                 if (txActive) {
                     txActive = false;
-                    AppLog.add("VoxEngine: VOX off");
+                    AppLog.add("VoxEngine: VOX off (myVox=0)");
                 }
                 silentTicks = 0;
                 continue;
             }
 
             if (rms >= myVox) {
-                /* Сигнал выше порога — передача. */
                 silentTicks = 0;
                 if (!txActive) {
                     txActive = true;
                     AppLog.add("VoxEngine: TX ON (rms=" + rms
                             + ", vox=" + myVox + ")");
                 }
-                sendFrame(pcm16, read, g711buf, myVox);
+                sendFrame(pcm16, read, g711buf);
             } else {
-                /* Сигнал ниже порога — считаем тишину. */
                 if (txActive) {
                     silentTicks++;
-                    /* vox_pause: 50 = 1 секунда. Один тик = 20 мс.
-                     * Значит порог в тиках = vox_pause * 20 мс / 20 мс = vox_pause. */
                     if (silentTicks >= voxPause) {
                         txActive = false;
                         AppLog.add("VoxEngine: TX OFF (silent="
                                 + silentTicks + ", pause=" + voxPause + ")");
                         silentTicks = 0;
                     } else {
-                        /* Продолжаем отправлять тишину, чтобы не рвать поток. */
-                        sendFrame(pcm16, read, g711buf, myVox);
+                        sendFrame(pcm16, read, g711buf);
                     }
                 }
             }
         }
     }
 
-    /* Отправка одного кадра G711 на сервер. */
-    private void sendFrame(byte[] pcm16, int read, byte[] g711buf, int myVox) {
+    private void sendFrame(byte[] pcm16, int read, byte[] g711buf) {
         if (pmrSocket == null) return;
 
         g711.encode(pcm16, 0, read, g711buf);
         int payloadLen = read / 2;
-
         int secret = pmrSocket.getKanalSecretInstance();
 
-        /* Резервный пакет 326 байт: [cmd][kanal][client_lo][client_hi][secret_lo][secret_hi][payload] */
         byte[] reserve = new byte[6 + payloadLen];
         reserve[0] = (byte) AudioEngine.CMD_G711_16K;
         reserve[1] = 0;
@@ -170,7 +160,6 @@ public class VoxEngine {
         reserve[5] = (byte) ((secret >> 8) & 0xFF);
         System.arraycopy(g711buf, 0, reserve, 6, payloadLen);
 
-        /* Основной пакет 324 байта — без secret. */
         byte[] main = new byte[4 + payloadLen];
         main[0] = (byte) AudioEngine.CMD_G711_16K;
         main[1] = 0;
@@ -181,7 +170,7 @@ public class VoxEngine {
         pmrSocket.sendVoice(main, reserve);
     }
 
-    /* RMS-амплитуда буфера PCM 16 бит (little-endian). */
+    /* RMS-амплитуда PCM 16 бит. Шкала 0..1000, делитель 32.0. */
     private static int calcRms(byte[] pcm, int len) {
         long sum = 0;
         int n = len / 2;
@@ -192,9 +181,8 @@ public class VoxEngine {
         if (n == 0) return 0;
         double mean = (double) sum / n;
         double rms = Math.sqrt(mean);
-        /* Масштабируем в 0..500 — как ожидает UI. */
-        int scaled = (int) (rms / 64.0);
-        if (scaled > 500) scaled = 500;
+        int scaled = (int) (rms / 32.0);
+        if (scaled > 1000) scaled = 1000;
         return scaled;
     }
 }
