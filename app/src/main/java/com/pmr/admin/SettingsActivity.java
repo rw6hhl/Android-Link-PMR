@@ -1,7 +1,10 @@
 package com.pmr.admin;
 
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.media.AudioDeviceInfo;
+import android.media.AudioManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -14,7 +17,12 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран настроек Android Link PMR V1.1. */
+/* Экран настроек Android Link PMR V1.4.
+ *
+ * Изменения V1.4:
+ *   - USB-индикатор через прямой AudioManager.getDevices();
+ *   - без AudioDeviceWatcher.
+ */
 public class SettingsActivity extends AppCompatActivity {
 
     private EditText passCurrent;
@@ -32,13 +40,15 @@ public class SettingsActivity extends AppCompatActivity {
 
     private VoxView voxView;
     private TextView voxStateText;
+    private TextView usbStatusText;
 
     private Handler handler;
     private final Runnable uiLoop = new Runnable() {
         @Override
         public void run() {
             refreshVoxUi();
-            handler.postDelayed(this, 100);
+            refreshUsbUi();
+            handler.postDelayed(this, 500);
         }
     };
 
@@ -64,6 +74,7 @@ public class SettingsActivity extends AppCompatActivity {
 
         voxView = findViewById(R.id.voxView);
         voxStateText = findViewById(R.id.voxStateText);
+        usbStatusText = findViewById(R.id.usbStatusText);
 
         Button saveBtn = findViewById(R.id.btnSaveSettings);
         if (saveBtn != null) saveBtn.setOnClickListener(v -> saveSettings());
@@ -98,6 +109,33 @@ public class SettingsActivity extends AppCompatActivity {
         } else {
             voxView.setCurrentRms(0);
             if (voxStateText != null) voxStateText.setText("СОСТОЯНИЕ: —");
+        }
+    }
+
+    /* USB-индикатор через прямой AudioManager. */
+    private void refreshUsbUi() {
+        if (usbStatusText == null) return;
+        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (am == null) {
+            usbStatusText.setText("USB-аудио: недоступно");
+            return;
+        }
+        String name = null;
+        AudioDeviceInfo[] devs = am.getDevices(AudioManager.GET_DEVICES_ALL);
+        for (AudioDeviceInfo d : devs) {
+            int t = d.getType();
+            if (t == AudioDeviceInfo.TYPE_USB_DEVICE
+                    || t == AudioDeviceInfo.TYPE_USB_HEADSET
+                    || t == AudioDeviceInfo.TYPE_USB_ACCESSORY) {
+                CharSequence pn = d.getProductName();
+                name = (pn != null) ? pn.toString() : "USB-аудио";
+                break;
+            }
+        }
+        if (name != null) {
+            usbStatusText.setText("USB-аудио: ПОДКЛЮЧЕНО — " + name);
+        } else {
+            usbStatusText.setText("USB-аудио: НЕ ПОДКЛЮЧЕНО (используется встроенное)");
         }
     }
 

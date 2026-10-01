@@ -14,7 +14,11 @@ import androidx.core.app.NotificationCompat;
 import java.io.File;
 import java.io.InputStream;
 
-/* Foreground Service Android Link PMR V1.1. */
+/* Foreground Service Android Link PMR V1.4.
+ *
+ * Без AudioDeviceWatcher — смена аудиоустройства требует
+ * перезапуска программы (по решению пользователя).
+ */
 public class PmrService extends Service {
 
     public static final String CHANNEL_ID = "pmr_admin_ch";
@@ -33,7 +37,7 @@ public class PmrService extends Service {
     public void onCreate() {
         super.onCreate();
 
-        AppLog.add("PmrService.onCreate() — старт V1.1 Android Link PMR");
+        AppLog.add("PmrService.onCreate() — старт V1.4 Android Link PMR");
 
         File dir = getFilesDir();
         File listTxt = new File(dir, "list.txt");

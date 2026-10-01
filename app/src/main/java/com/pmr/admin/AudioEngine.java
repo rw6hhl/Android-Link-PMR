@@ -1,11 +1,18 @@
 package com.pmr.admin;
 
 import android.content.Context;
+import android.media.AudioDeviceInfo;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
 
-/* Звуковой движок Android Link PMR V1.1. */
+/* Звуковой движок Android Link PMR V1.4.
+ *
+ * Изменения V1.4:
+ *   - при старте определяется текущее аудиоустройство и пишется в лог;
+ *   - AudioTrack создаются с учётом активного устройства;
+ *   - смена устройства требует перезапуска приложения.
+ */
 public class AudioEngine {
 
     public static final int CMD_PCM8_16K  = 19;
@@ -38,6 +45,10 @@ public class AudioEngine {
 
     public void startPlaying() {
         if (isPlaying) return;
+
+        logCurrentAudioDevice("AudioEngine");
+        AppLog.add("AudioEngine: использование " +
+                (isUsbPresent() ? "USB-аудио" : "встроенного динамика"));
 
         for (int i = 0; i < SLOTS_PER_FORMAT; i++) {
             if (tracks[i] == null) {
@@ -83,6 +94,33 @@ public class AudioEngine {
                 } catch (Exception ignored) {}
                 tracks[i] = null;
             }
+        }
+    }
+
+    private boolean isUsbPresent() {
+        AudioManager am = (AudioManager) appCtx.getSystemService(Context.AUDIO_SERVICE);
+        if (am == null) return false;
+        AudioDeviceInfo[] devs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+        for (AudioDeviceInfo d : devs) {
+            int t = d.getType();
+            if (t == AudioDeviceInfo.TYPE_USB_DEVICE
+                    || t == AudioDeviceInfo.TYPE_USB_HEADSET
+                    || t == AudioDeviceInfo.TYPE_USB_ACCESSORY) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void logCurrentAudioDevice(String tag) {
+        AudioManager am = (AudioManager) appCtx.getSystemService(Context.AUDIO_SERVICE);
+        if (am == null) return;
+        AudioDeviceInfo[] devs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+        for (AudioDeviceInfo d : devs) {
+            CharSequence pn = d.getProductName();
+            String name = (pn != null) ? pn.toString() : "?";
+            AppLog.add(tag + ": output device type=" + d.getType()
+                    + ", name=" + name);
         }
     }
 

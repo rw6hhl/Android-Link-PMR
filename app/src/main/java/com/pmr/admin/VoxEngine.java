@@ -2,12 +2,19 @@ package com.pmr.admin;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.media.AudioDeviceInfo;
 import android.media.AudioFormat;
+import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 
-/* VOX-движок Android Link PMR V1.1.
- * Простой вариант: AudioRecord + поток, без heartbeat и getState.
+/* VOX-движок Android Link PMR V1.4.
+ *
+ * Изменения V1.4:
+ *   - при старте определяется текущее аудиоустройство и пишется в лог;
+ *   - AudioRecord создаётся с учётом активного устройства;
+ *   - никакого heartbeat и пересоздания — смена устройства требует
+ *     перезапуска приложения (по решению пользователя).
  */
 public class VoxEngine {
 
@@ -37,6 +44,10 @@ public class VoxEngine {
 
     public void start() {
         if (running) return;
+
+        logCurrentAudioDevice("VoxEngine");
+        AppLog.add("VoxEngine: использование " +
+                (isUsbPresent() ? "USB-аудио" : "встроенного микрофона"));
 
         try {
             recorder = new AudioRecord(
@@ -70,6 +81,35 @@ public class VoxEngine {
         }
         voxThread = null;
         AppLog.add("VoxEngine: поток остановлен");
+    }
+
+    /* Определение наличия USB-аудио. */
+    private boolean isUsbPresent() {
+        AudioManager am = (AudioManager) appCtx.getSystemService(Context.AUDIO_SERVICE);
+        if (am == null) return false;
+        AudioDeviceInfo[] devs = am.getDevices(AudioManager.GET_DEVICES_INPUTS);
+        for (AudioDeviceInfo d : devs) {
+            int t = d.getType();
+            if (t == AudioDeviceInfo.TYPE_USB_DEVICE
+                    || t == AudioDeviceInfo.TYPE_USB_HEADSET
+                    || t == AudioDeviceInfo.TYPE_USB_ACCESSORY) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /* Логирование всех входных устройств при старте. */
+    private void logCurrentAudioDevice(String tag) {
+        AudioManager am = (AudioManager) appCtx.getSystemService(Context.AUDIO_SERVICE);
+        if (am == null) return;
+        AudioDeviceInfo[] devs = am.getDevices(AudioManager.GET_DEVICES_INPUTS);
+        for (AudioDeviceInfo d : devs) {
+            CharSequence pn = d.getProductName();
+            String name = (pn != null) ? pn.toString() : "?";
+            AppLog.add(tag + ": input device type=" + d.getType()
+                    + ", name=" + name);
+        }
     }
 
     private void loop() {
