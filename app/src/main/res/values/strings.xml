@@ -47,7 +47,10 @@
     <string name="toast_26_on">261 отправлено (включить)</string>
     <string name="toast_26_null">Служба не готова</string>
 
-    <!-- Восстановлено для item_chan.xml (не используется в V1.2) -->
+    <!-- Восстановлено для item_chan.xml и ChanAdapter.java (не используется в V1.2) -->
     <string name="ban_on">БАН</string>
     <string name="ban_off">БАН</string>
+    <string name="toast_ban_sent">Бан отправлен b%1$d</string>
+    <string name="toast_ban_null">Служба не готова</string>
+    <string name="toast_ban_not_running">Сокет не открыт</string>
 </resources>
