@@ -3,29 +3,31 @@ package com.pmr.admin;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.media.AudioDeviceInfo;
-import android.media.AudioManager;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран настроек Android Link PMR V1.1.
+/* Экран настроек Android Link PMR V1.2.
  *
- * Изменения V1.1:
- *   - убрана галочка «Требовать пароль» и блок смены пароля (по решению пользователя);
- *   - убрана кнопка btnSaveVox — одна кнопка СОХРАНИТЬ на всё;
- *   - добавлен блок USB-аудио: статус + название;
- *   - обновление UI раз в 100 мс.
+ * Изменения V1.2:
+ *   - вернули галочку «Требовать пароль при запуске»;
+ *   - USB-статус — из AudioDeviceWatcher (без своего getDevices);
+ *   - VOX UI обновляется 10 раз в секунду.
  */
 public class SettingsActivity extends AppCompatActivity {
+
+    private EditText passCurrent;
+    private EditText passNew;
+    private EditText passConfirm;
+    private CheckBox requirePassBox;
 
     private EditText regMailIndex;
     private EditText regPChannel;
@@ -55,6 +57,11 @@ public class SettingsActivity extends AppCompatActivity {
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_settings);
+
+        passCurrent  = findViewById(R.id.passCurrent);
+        passNew      = findViewById(R.id.passNew);
+        passConfirm  = findViewById(R.id.passConfirm);
+        requirePassBox = findViewById(R.id.requirePassBox);
 
         regMailIndex = findViewById(R.id.regMailIndex);
         regPChannel  = findViewById(R.id.regPChannel);
@@ -104,30 +111,16 @@ public class SettingsActivity extends AppCompatActivity {
         }
     }
 
-    /* Проверка наличия USB-аудио. */
     private void refreshUsbUi() {
         if (usbStatusText == null) return;
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            usbStatusText.setText("USB-аудио: API < 23, проверка недоступна");
+        if (PmrService.deviceWatcher == null) {
+            usbStatusText.setText("USB-аудио: проверка недоступна");
             return;
         }
-        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        if (am == null) {
-            usbStatusText.setText("USB-аудио: AudioManager недоступен");
-            return;
-        }
-        AudioDeviceInfo[] devices = am.getDevices(AudioManager.GET_DEVICES_ALL);
-        String name = null;
-        for (AudioDeviceInfo d : devices) {
-            int t = d.getType();
-            if (t == AudioDeviceInfo.TYPE_USB_DEVICE
-                    || t == AudioDeviceInfo.TYPE_USB_HEADSET) {
-                CharSequence pn = d.getProductName();
-                name = (pn != null) ? pn.toString() : "USB-аудио";
-                break;
-            }
-        }
-        if (name != null) {
+        PmrService.deviceWatcher.scan();
+        if (PmrService.deviceWatcher.isUsbConnected()) {
+            String name = PmrService.deviceWatcher.getUsbName();
+            if (name == null || name.isEmpty()) name = "USB-аудио";
             usbStatusText.setText("USB-аудио: ПОДКЛЮЧЕНО — " + name);
         } else {
             usbStatusText.setText("USB-аудио: НЕ ПОДКЛЮЧЕНО (используется встроенное)");
@@ -137,6 +130,10 @@ public class SettingsActivity extends AppCompatActivity {
     private void loadSettings() {
         SharedPreferences sp = getSharedPreferences(
                 PasswordActivity.PREFS, MODE_PRIVATE);
+
+        boolean requirePass = sp.getBoolean(
+                PasswordActivity.KEY_REQUIRE_PASSWORD, true);
+        if (requirePassBox != null) requirePassBox.setChecked(requirePass);
 
         if (regMailIndex != null)
             regMailIndex.setText(sp.getString(
@@ -177,16 +174,47 @@ public class SettingsActivity extends AppCompatActivity {
         }
     }
 
-    /* Сохранить всё одной кнопкой. */
     private void saveSettings() {
         SharedPreferences sp = getSharedPreferences(
                 PasswordActivity.PREFS, MODE_PRIVATE);
+
+        boolean requirePass = requirePassBox != null && requirePassBox.isChecked();
+        sp.edit().putBoolean(PasswordActivity.KEY_REQUIRE_PASSWORD,
+                requirePass).apply();
 
         if (voxView != null) {
             sp.edit()
                     .putInt(PasswordActivity.KEY_MY_VOX, voxView.getMyVox())
                     .putInt(PasswordActivity.KEY_VOX_PAUSE, voxView.getVoxPause())
                     .apply();
+        }
+
+        String cur = sp.getString(PasswordActivity.KEY_PASSWORD,
+                PasswordActivity.DEFAULT_PASSWORD);
+        String enteredCur = (passCurrent != null)
+                ? passCurrent.getText().toString() : "";
+        String newPass = (passNew != null)
+                ? passNew.getText().toString() : "";
+        String confirmPass = (passConfirm != null)
+                ? passConfirm.getText().toString() : "";
+
+        if (!enteredCur.isEmpty() || !newPass.isEmpty() || !confirmPass.isEmpty()) {
+            if (!cur.equals(enteredCur)) {
+                Toast.makeText(this, R.string.settings_error_current,
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (newPass.isEmpty()) {
+                Toast.makeText(this, R.string.settings_error_empty,
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (!newPass.equals(confirmPass)) {
+                Toast.makeText(this, R.string.settings_error_mismatch,
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+            sp.edit().putString(PasswordActivity.KEY_PASSWORD, newPass).apply();
         }
 
         String myMailIndex = (regMailIndex != null)
@@ -225,5 +253,9 @@ public class SettingsActivity extends AppCompatActivity {
 
         Toast.makeText(this, R.string.settings_saved,
                 Toast.LENGTH_SHORT).show();
+
+        if (passCurrent != null) passCurrent.setText("");
+        if (passNew != null) passNew.setText("");
+        if (passConfirm != null) passConfirm.setText("");
     }
 }

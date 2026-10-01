@@ -14,11 +14,11 @@ import androidx.core.app.NotificationCompat;
 import java.io.File;
 import java.io.InputStream;
 
-/* Foreground Service Android Link PMR V1.0.
+/* Foreground Service Android Link PMR V1.2.
  *
- * Изменения V1.0:
- *   - создаётся VoxEngine и запускается;
- *   - PTT больше не используется.
+ * Изменения V1.2:
+ *   - создаётся AudioDeviceWatcher для реакции на смену USB-аудио;
+ *   - при смене устройства вызывается rebuildTracks()/rebuildRecorder().
  */
 public class PmrService extends Service {
 
@@ -33,12 +33,13 @@ public class PmrService extends Service {
     public static PmrSocket pmrSocket;
     public static AudioEngine audioEngine;
     public static VoxEngine voxEngine;
+    public static AudioDeviceWatcher deviceWatcher;
 
     @Override
     public void onCreate() {
         super.onCreate();
 
-        AppLog.add("PmrService.onCreate() — старт V1.0 Android Link PMR");
+        AppLog.add("PmrService.onCreate() — старт V1.2 Android Link PMR");
 
         File dir = getFilesDir();
         File listTxt = new File(dir, "list.txt");
@@ -75,6 +76,15 @@ public class PmrService extends Service {
         voxEngine = new VoxEngine(getApplicationContext(), pmrSocket);
         voxEngine.start();
 
+        deviceWatcher = new AudioDeviceWatcher(getApplicationContext(),
+                (usb, name) -> {
+                    AppLog.add("PmrService: USB device changed, usb="
+                            + usb + ", name=" + name);
+                    if (audioEngine != null) audioEngine.rebuildTracks();
+                    if (voxEngine != null)   voxEngine.rebuildRecorder();
+                });
+        deviceWatcher.start();
+
         pmrSocket.start();
 
         createChannel();
@@ -91,6 +101,9 @@ public class PmrService extends Service {
     @Override
     public void onDestroy() {
         AppLog.add("PmrService.onDestroy()");
+        if (deviceWatcher != null) {
+            try { deviceWatcher.stop(); } catch (Exception ignored) {}
+        }
         if (voxEngine != null) {
             try { voxEngine.stop(); } catch (Exception ignored) {}
         }

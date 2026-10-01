@@ -3,15 +3,13 @@ package com.pmr.admin;
 import android.content.Context;
 import android.media.AudioFormat;
 import android.media.AudioManager;
-import android.media.AudioRecord;
 import android.media.AudioTrack;
 
-/* Звуковой движок Android Link PMR V1.0.
+/* Звуковой движок Android Link PMR V1.2.
  *
- * Изменения V1.0:
- *   - убраны startRecording/stopRecording/recordLoop — их задачи
- *     перешли к VoxEngine;
- *   - AudioRecord больше не используется в этом классе.
+ * Изменения V1.2:
+ *   - при смене USB-аудио вызывается rebuildTracks() — пересоздание AudioTrack[];
+ *   - при ошибке write() — поток не падает.
  */
 public class AudioEngine {
 
@@ -45,6 +43,21 @@ public class AudioEngine {
 
     public void startPlaying() {
         if (isPlaying) return;
+        buildTracks();
+        isPlaying = true;
+        AppLog.add("AudioEngine: startPlaying, volume=" + VOLUME_BOOST
+                + ", slots=" + tracks.length);
+    }
+
+    /* Пересоздать AudioTrack[] при смене устройства. */
+    public void rebuildTracks() {
+        if (!isPlaying) return;
+        AppLog.add("AudioEngine: rebuildTracks()");
+        releaseTracks();
+        buildTracks();
+    }
+
+    private void buildTracks() {
         for (int i = 0; i < SLOTS_PER_FORMAT; i++) {
             if (tracks[i] == null) {
                 tracks[i] = new AudioTrack(
@@ -73,13 +86,9 @@ public class AudioEngine {
                 try { tracks[i].setVolume(VOLUME_BOOST); } catch (Exception ignored) {}
             }
         }
-        isPlaying = true;
-        AppLog.add("AudioEngine: startPlaying, volume=" + VOLUME_BOOST
-                + ", slots=" + tracks.length);
     }
 
-    public void stopPlaying() {
-        isPlaying = false;
+    private void releaseTracks() {
         for (int i = 0; i < tracks.length; i++) {
             if (tracks[i] != null) {
                 try {
@@ -90,6 +99,11 @@ public class AudioEngine {
                 tracks[i] = null;
             }
         }
+    }
+
+    public void stopPlaying() {
+        isPlaying = false;
+        releaseTracks();
     }
 
     private boolean isValid16(int client) {

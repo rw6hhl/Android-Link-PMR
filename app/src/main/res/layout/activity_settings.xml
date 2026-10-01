@@ -18,8 +18,6 @@
             android:textStyle="bold"
             android:textColor="@color/c_blue" />
 
-        <!-- ======================= VOX ======================= -->
-
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -43,8 +41,6 @@
             android:layout_height="180dp"
             android:layout_marginTop="8dp" />
 
-        <!-- ==================== USB-аудио ==================== -->
-
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -61,8 +57,6 @@
             android:text="USB-аудио: проверка…"
             android:textSize="16sp"
             android:textColor="@color/c_black" />
-
-        <!-- ==================== Регистрационные ==================== -->
 
         <TextView
             android:layout_width="match_parent"
@@ -198,7 +192,46 @@
                 android:textSize="16sp" />
         </LinearLayout>
 
-        <!-- Одна кнопка СОХРАНИТЬ внизу. -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="Смена пароля"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <CheckBox
+            android:id="@+id/requirePassBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/settings_password_title"
+            android:textSize="16sp"
+            android:checked="true" />
+
+        <EditText android:id="@+id/passCurrent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="@string/settings_current_pass"
+            android:inputType="textPassword"
+            android:textSize="18sp" />
+
+        <EditText android:id="@+id/passNew"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="@string/settings_new_pass"
+            android:inputType="textPassword"
+            android:textSize="18sp" />
+
+        <EditText android:id="@+id/passConfirm"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="@string/settings_confirm_pass"
+            android:inputType="textPassword"
+            android:textSize="18sp" />
 
         <Button
             android:id="@+id/btnSaveSettings"

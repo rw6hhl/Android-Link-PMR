@@ -6,13 +6,12 @@ import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 
-/* VOX-движок Android Link PMR V1.1.
+/* VOX-движок Android Link PMR V1.2.
  *
- * Изменения V1.1:
- *   - шкала RMS 0..1000 (было 0..500);
- *   - масштабирование /32.0 (было /64.0);
- *   - диагностический лог VoxEngine раз в секунду;
- *   - при неактивном VOX всё равно обновляется lastRms.
+ * Изменения V1.2:
+ *   - при смене USB-аудио вызывается rebuildRecorder();
+ *   - добавлен heartbeat — если read() не возвращает данные 3 секунды,
+ *     поток пересоздаёт AudioRecord (лечит зависание при USB).
  */
 public class VoxEngine {
 
@@ -21,6 +20,8 @@ public class VoxEngine {
     private static final int BYTES_PER_ELEM = 2;
     private static final int BUF_SIZE = BUF_ELEMENTS * BYTES_PER_ELEM;
 
+    private static final long HEARTBEAT_TIMEOUT_MS = 3000L;
+
     private final Context appCtx;
     private final PmrSocket pmrSocket;
     private final G711Ua g711 = new G711Ua();
@@ -28,6 +29,7 @@ public class VoxEngine {
     private AudioRecord recorder = null;
     private Thread voxThread = null;
     private volatile boolean running = false;
+    private volatile long lastReadTime = 0L;
 
     private volatile boolean txActive = false;
     private volatile int lastRms = 0;
@@ -42,21 +44,7 @@ public class VoxEngine {
 
     public void start() {
         if (running) return;
-
-        try {
-            recorder = new AudioRecord(
-                    MediaRecorder.AudioSource.MIC,
-                    SAMPLE_RATE,
-                    AudioFormat.CHANNEL_IN_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT,
-                    BUF_SIZE * 2);
-            recorder.startRecording();
-            AppLog.add("VoxEngine: AudioRecord init OK");
-        } catch (Exception e) {
-            AppLog.add("VoxEngine: ошибка AudioRecord — " + e);
-            recorder = null;
-            return;
-        }
+        if (!openRecorder()) return;
 
         running = true;
         voxThread = new Thread(this::loop, "vox-loop");
@@ -66,6 +54,45 @@ public class VoxEngine {
 
     public void stop() {
         running = false;
+        closeRecorder();
+        voxThread = null;
+        AppLog.add("VoxEngine: поток остановлен");
+    }
+
+    /* Пересоздать AudioRecord при смене устройства. */
+    public void rebuildRecorder() {
+        if (!running) return;
+        AppLog.add("VoxEngine: rebuildRecorder()");
+        closeRecorder();
+        openRecorder();
+    }
+
+    private boolean openRecorder() {
+        try {
+            recorder = new AudioRecord(
+                    MediaRecorder.AudioSource.MIC,
+                    SAMPLE_RATE,
+                    AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT,
+                    BUF_SIZE * 2);
+            if (recorder.getState() != AudioRecord.STATE_INITIALIZED) {
+                AppLog.add("VoxEngine: AudioRecord STATE_INITIALIZED FAIL");
+                recorder.release();
+                recorder = null;
+                return false;
+            }
+            recorder.startRecording();
+            lastReadTime = System.currentTimeMillis();
+            AppLog.add("VoxEngine: AudioRecord init OK");
+            return true;
+        } catch (Exception e) {
+            AppLog.add("VoxEngine: ошибка AudioRecord — " + e);
+            recorder = null;
+            return false;
+        }
+    }
+
+    private void closeRecorder() {
         if (recorder != null) {
             try {
                 recorder.stop();
@@ -73,11 +100,8 @@ public class VoxEngine {
             } catch (Exception ignored) {}
             recorder = null;
         }
-        voxThread = null;
-        AppLog.add("VoxEngine: поток остановлен");
     }
 
-    /* Главный цикл. Раз в секунду пишем диагностику в AppLog. */
     private void loop() {
         byte[] pcm16 = new byte[BUF_SIZE];
         byte[] g711buf = new byte[BUF_ELEMENTS];
@@ -85,13 +109,30 @@ public class VoxEngine {
         int diagCounter = 0;
 
         while (running) {
+            /* Heartbeat — если давно не было данных, пересоздаём AudioRecord. */
+            long now = System.currentTimeMillis();
+            if (lastReadTime > 0 && (now - lastReadTime) > HEARTBEAT_TIMEOUT_MS) {
+                AppLog.add("VoxEngine: heartbeat timeout — пересоздание AudioRecord");
+                closeRecorder();
+                openRecorder();
+                lastReadTime = System.currentTimeMillis();
+                continue;
+            }
+
             int read;
             try {
                 read = recorder.read(pcm16, 0, pcm16.length);
             } catch (Exception e) {
-                break;
+                AppLog.add("VoxEngine: read exception — " + e);
+                closeRecorder();
+                openRecorder();
+                continue;
             }
-            if (read <= 0) continue;
+            if (read > 0) {
+                lastReadTime = System.currentTimeMillis();
+            } else {
+                continue;
+            }
 
             int rms = calcRms(pcm16, read);
             lastRms = rms;
@@ -103,7 +144,6 @@ public class VoxEngine {
             int voxPause = sp.getInt(PasswordActivity.KEY_VOX_PAUSE,
                     PasswordActivity.DEFAULT_VOX_PAUSE);
 
-            /* Диагностический лог — раз в секунду (50 тиков по 20 мс). */
             diagCounter++;
             if (diagCounter >= 50) {
                 AppLog.add("VoxEngine: rms=" + rms + ", vox=" + myVox
@@ -170,7 +210,6 @@ public class VoxEngine {
         pmrSocket.sendVoice(main, reserve);
     }
 
-    /* RMS-амплитуда PCM 16 бит. Шкала 0..1000, делитель 32.0. */
     private static int calcRms(byte[] pcm, int len) {
         long sum = 0;
         int n = len / 2;
