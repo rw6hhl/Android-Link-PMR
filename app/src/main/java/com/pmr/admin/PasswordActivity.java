@@ -10,9 +10,8 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран ввода пароля V3.2.
- * Добавлены:
- *   - KEY_IP_SERVER2 и DEFAULT_IP_SERVER2.
+/* Экран ввода пароля V1.0 Android Link PMR.
+ * Добавлены ключи VOX.
  */
 public class PasswordActivity extends AppCompatActivity {
 
@@ -24,7 +23,6 @@ public class PasswordActivity extends AppCompatActivity {
     public static final String KEY_CHECK_SYSTEM = "check_system";
     public static final String KEY_26_STATE = "state_26";
 
-    /* Регистрационные данные. */
     public static final String KEY_MY_MAIL_INDEX = "my_mail_index";
     public static final String KEY_MY_PCHANNEL   = "my_pchannel";
     public static final String KEY_PRIZNAK_PMR   = "priznak_pmr";
@@ -33,11 +31,14 @@ public class PasswordActivity extends AppCompatActivity {
     public static final String KEY_CALLSIGN      = "callsign";
     public static final String KEY_CITY          = "city";
 
+    /* VOX. */
+    public static final String KEY_MY_VOX     = "my_vox";
+    public static final String KEY_VOX_PAUSE  = "vox_pause";
+
     public static final String DEFAULT_PASSWORD = "Rostov2026";
     public static final int    DEFAULT_REFRESH = 2;
     public static final int    DEFAULT_PORT_PRM = 5323;
 
-    /* Значения по умолчанию для регистрационных данных. */
     public static final String DEFAULT_MY_MAIL_INDEX = "51953";
     public static final String DEFAULT_MY_PCHANNEL   = "5";
     public static final String DEFAULT_PRIZNAK_PMR   = "11777";
@@ -45,6 +46,10 @@ public class PasswordActivity extends AppCompatActivity {
     public static final String DEFAULT_IP_SERVER2    = "109.172.7.155";
     public static final String DEFAULT_CALLSIGN      = "RW6HHL";
     public static final String DEFAULT_CITY          = "Мин-Воды";
+
+    /* VOX по умолчанию. */
+    public static final int DEFAULT_MY_VOX    = 40;
+    public static final int DEFAULT_VOX_PAUSE = 15;
 
     private EditText passInput;
 

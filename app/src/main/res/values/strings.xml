@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Admin PMR</string>
-    <string name="app_version">V4.1</string>
+    <string name="app_name">Android Link PMR</string>
+    <string name="app_version">V1.0</string>
 
     <string name="password_hint">Пароль</string>
     <string name="password_btn">ВОЙТИ</string>
@@ -56,9 +56,9 @@
     <string name="log_cmd_out">→</string>
     <string name="log_cmd_in">←</string>
 
-    <string name="notif_channel">PMR Admin</string>
-    <string name="notif_title">PMR Admin работает</string>
-    <string name="notif_text">Соединение с сервером PMR активно</string>
+    <string name="notif_channel">Android Link PMR</string>
+    <string name="notif_title">Android Link PMR работает</string>
+    <string name="notif_text">VOX активен, связь с сервером PMR установлена</string>
 
     <string name="toast_ban_sent">Бан отправлен b%1$d</string>
     <string name="toast_ban_null">Служба не готова</string>
@@ -75,9 +75,4 @@
     <string name="check_unavailable">НЕДОСТУПЕН</string>
     <string name="check_on">ВКЛЮЧЁН</string>
     <string name="check_off">ОТКЛЮЧЁН</string>
-
-    <string name="btn_ptt">ПЕРЕДАЧА (PTT)</string>
-    <string name="btn_load_list">ЗАГРУЗИТЬ list.txt</string>
-    <string name="toast_list_loaded">Список загружен: %1$d записей</string>
-    <string name="toast_list_error">Ошибка загрузки list.txt</string>
 </resources>

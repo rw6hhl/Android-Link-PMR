@@ -5,18 +5,13 @@ import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.AudioTrack;
-import android.media.MediaRecorder;
 
-/* Звуковой движок Admin PMR V4.1.
+/* Звуковой движок Android Link PMR V1.0.
  *
- * Изменения V4.1:
- *   - массив AudioTrack расширен с 20 до 40:
- *       0..19  — 16 кГц
- *       20..39 — 8 кГц
- *   - убрано ограничение client < 10. Теперь сервер может прислать
- *     client в диапазоне 0..19 — все воспроизводится.
- *   - причина: сервер выдаёт client (i) из chanList как 0..N,
- *     где N доходит до 17. Всё, что >= 10, ранее отсеивалось.
+ * Изменения V1.0:
+ *   - убраны startRecording/stopRecording/recordLoop — их задачи
+ *     перешли к VoxEngine;
+ *   - AudioRecord больше не используется в этом классе.
  */
 public class AudioEngine {
 
@@ -29,48 +24,27 @@ public class AudioEngine {
 
     private static final int SAMPLE_RATE_16K = 16000;
     private static final int SAMPLE_RATE_8K  = 8000;
-    private static final int BUF_ELEMENTS    = 320;
-    private static final int BYTES_PER_ELEM  = 2;
-
-    /* Слотов на каждый формат: 20. Всего: 40. */
     private static final int SLOTS_PER_FORMAT = 20;
     private static final int OFFSET_8K = 20;
 
-    /* +70% к базовой громкости. */
     private static final float VOLUME_BOOST = 1.7f;
 
     private final Context appCtx;
     private final PmrSocket pmrSocket;
     private final G711Ua g711 = new G711Ua();
 
-    /* 0..19  — 16 кГц (client 0..19)
-     * 20..39 — 8 кГц  (client 0..19) */
     private AudioTrack[] tracks = new AudioTrack[40];
-    private AudioRecord recorder = null;
-    private Thread recorderThread = null;
-    private volatile boolean isRecording = false;
     private volatile boolean isPlaying = false;
-
-    private volatile int rej = CMD_G711_16K;
 
     public AudioEngine(Context ctx, PmrSocket sock) {
         this.appCtx = ctx;
         this.pmrSocket = sock;
     }
 
-    public void setRej(int r) { this.rej = r; }
-    public int  getRej()      { return rej; }
-    public boolean isRecording() { return isRecording; }
-    public boolean isPlaying()   { return isPlaying; }
-
-    public boolean isDuplex() { return true; }
-
-    /* ====================== ВОСПРОИЗВЕДЕНИЕ ====================== */
+    public boolean isPlaying() { return isPlaying; }
 
     public void startPlaying() {
         if (isPlaying) return;
-
-        /* 16 кГц — слоты 0..19 */
         for (int i = 0; i < SLOTS_PER_FORMAT; i++) {
             if (tracks[i] == null) {
                 tracks[i] = new AudioTrack(
@@ -85,7 +59,6 @@ public class AudioEngine {
                 try { tracks[i].setVolume(VOLUME_BOOST); } catch (Exception ignored) {}
             }
         }
-        /* 8 кГц — слоты 20..39 */
         for (int i = OFFSET_8K; i < OFFSET_8K + SLOTS_PER_FORMAT; i++) {
             if (tracks[i] == null) {
                 tracks[i] = new AudioTrack(
@@ -119,31 +92,10 @@ public class AudioEngine {
         }
     }
 
-    public void playall() {
-        for (int i = 0; i < tracks.length; i++) {
-            if (tracks[i] != null && tracks[i].getState() == AudioTrack.STATE_INITIALIZED) {
-                try { tracks[i].play(); } catch (Exception ignored) {}
-            }
-        }
-    }
-
-    public void pauseall() {
-        for (int i = 0; i < tracks.length; i++) {
-            if (tracks[i] != null && tracks[i].getPlayState() == AudioTrack.PLAYSTATE_PLAYING) {
-                try {
-                    tracks[i].pause();
-                    tracks[i].flush();
-                } catch (Exception ignored) {}
-            }
-        }
-    }
-
-    /* Проверка корректного диапазона client для 16 кГц. */
     private boolean isValid16(int client) {
         return client >= 0 && client < SLOTS_PER_FORMAT;
     }
 
-    /* Проверка корректного диапазона client для 8 кГц. */
     private boolean isValid8(int client) {
         return client >= 0 && client < SLOTS_PER_FORMAT;
     }
@@ -231,133 +183,6 @@ public class AudioEngine {
         } catch (Exception ignored) {}
     }
 
-    /* ========================== ЗАПИСЬ ========================== */
-
-    public void startRecording() {
-        if (isRecording) return;
-
-        int sampleRate;
-        int bufSize;
-        if (rej == CMD_G711_16K || rej == CMD_PCM16_16K || rej == CMD_PCM8_16K) {
-            sampleRate = SAMPLE_RATE_16K;
-            bufSize = BUF_ELEMENTS * BYTES_PER_ELEM;
-        } else {
-            sampleRate = SAMPLE_RATE_8K;
-            bufSize = BUF_ELEMENTS * BYTES_PER_ELEM / 2;
-        }
-
-        try {
-            recorder = new AudioRecord(
-                    MediaRecorder.AudioSource.MIC,
-                    sampleRate,
-                    AudioFormat.CHANNEL_IN_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT,
-                    bufSize * 2);
-            recorder.startRecording();
-            isRecording = true;
-
-            recorderThread = new Thread(() -> recordLoop(sampleRate), "pmr-rec");
-            recorderThread.start();
-
-            AppLog.add("AudioEngine: запись стартовала, rate=" + sampleRate
-                    + ", rej=" + rej);
-        } catch (Exception e) {
-            AppLog.add("AudioEngine: ошибка записи — " + e);
-        }
-    }
-
-    public void stopRecording() {
-        isRecording = false;
-        if (recorder != null) {
-            try {
-                recorder.stop();
-                recorder.release();
-            } catch (Exception ignored) {}
-            recorder = null;
-        }
-        recorderThread = null;
-        AppLog.add("AudioEngine: запись остановлена");
-    }
-
-    private void recordLoop(int sampleRate) {
-        byte[] pcm16 = new byte[BUF_ELEMENTS * BYTES_PER_ELEM];
-        byte[] g711buf = new byte[BUF_ELEMENTS];
-
-        while (isRecording) {
-            int read;
-            try {
-                read = recorder.read(pcm16, 0, pcm16.length);
-            } catch (Exception e) {
-                break;
-            }
-            if (read <= 0) continue;
-
-            int cmd;
-            int payloadLen;
-            byte[] payload;
-
-            if (rej == CMD_G711_16K) {
-                cmd = CMD_G711_16K;
-                g711.encode(pcm16, 0, read, g711buf);
-                payloadLen = read / 2;
-                payload = new byte[payloadLen];
-                System.arraycopy(g711buf, 0, payload, 0, payloadLen);
-            } else if (rej == CMD_PCM16_16K) {
-                cmd = CMD_PCM16_16K;
-                payloadLen = read;
-                payload = new byte[payloadLen];
-                System.arraycopy(pcm16, 0, payload, 0, payloadLen);
-            } else if (rej == CMD_PCM16_8K) {
-                cmd = CMD_PCM16_8K;
-                payloadLen = read;
-                payload = new byte[payloadLen];
-                System.arraycopy(pcm16, 0, payload, 0, payloadLen);
-            } else if (rej == CMD_PCM8_16K) {
-                cmd = CMD_PCM8_16K;
-                short[] s = byte2short(pcm16);
-                payloadLen = s.length;
-                payload = new byte[payloadLen];
-                for (int i = 0; i < s.length; i++) {
-                    payload[i] = (byte) (s[i] / 256);
-                }
-            } else if (rej == CMD_G711_8K) {
-                cmd = CMD_G711_8K;
-                g711.encode(pcm16, 0, read, g711buf);
-                payloadLen = read / 2;
-                payload = new byte[payloadLen];
-                System.arraycopy(g711buf, 0, payload, 0, payloadLen);
-            } else {
-                continue;
-            }
-
-            /* Резервный пакет 326 байт:
-             * [cmd][kanal=0][client_lo][client_hi][secret_lo][secret_hi][payload] */
-            int secret = (pmrSocket != null) ? pmrSocket.getKanalSecretInstance() : 0;
-            byte[] packet = new byte[6 + payloadLen];
-            packet[0] = (byte) cmd;
-            packet[1] = 0;
-            packet[2] = (byte) (PmrSocket.Priznak_pmr & 0xFF);
-            packet[3] = (byte) ((PmrSocket.Priznak_pmr >> 8) & 0xFF);
-            packet[4] = (byte) (secret & 0xFF);
-            packet[5] = (byte) ((secret >> 8) & 0xFF);
-            System.arraycopy(payload, 0, packet, 6, payloadLen);
-
-            /* Основной пакет 324 байта — без secret, как в C-коде. */
-            byte[] mainPacket = new byte[4 + payloadLen];
-            mainPacket[0] = (byte) cmd;
-            mainPacket[1] = 0;
-            mainPacket[2] = (byte) (PmrSocket.Priznak_pmr & 0xFF);
-            mainPacket[3] = (byte) ((PmrSocket.Priznak_pmr >> 8) & 0xFF);
-            System.arraycopy(payload, 0, mainPacket, 4, payloadLen);
-
-            if (pmrSocket != null) {
-                pmrSocket.sendVoice(mainPacket, packet);
-            }
-        }
-    }
-
-    /* ========================== УТИЛИТЫ ========================== */
-
     private static byte[] short2byte(short[] sArr) {
         int length = sArr.length;
         byte[] bArr = new byte[length * 2];
@@ -367,13 +192,5 @@ public class AudioEngine {
             bArr[i2 + 1] = (byte) (sArr[i] >> 8);
         }
         return bArr;
-    }
-
-    private static short[] byte2short(byte[] b) {
-        short[] s = new short[b.length / 2];
-        for (int i = 0; i < s.length; i++) {
-            s[i] = (short) ((b[i * 2] & 255) | (b[i * 2 + 1] << 8));
-        }
-        return s;
     }
 }

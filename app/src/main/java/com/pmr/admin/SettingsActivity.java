@@ -2,40 +2,29 @@ package com.pmr.admin;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.WindowManager;
 import android.widget.Button;
-import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
-import java.io.File;
-import java.io.InputStream;
-
-/* Экран настроек V4.0.
+/* Экран настроек Android Link PMR V1.0.
  *
- * Изменения V4.0:
- *   - кнопка «ЗАГРУЗИТЬ list.txt» переехала сюда из MainActivity;
- *   - добавлен ActivityResultLauncher для выбора файла list.txt;
- *   - метод applyListFile(Uri) — как в V3.3, но здесь.
+ * Основное:
+ *   - VoxView (индикатор + две метки);
+ *   - обновление состояния VOX каждые 100 мс;
+ *   - кнопка «СОХРАНИТЬ» сохраняет все настройки (VOX + регистрационные + пароль).
  */
 public class SettingsActivity extends AppCompatActivity {
 
     private EditText passCurrent;
     private EditText passNew;
     private EditText passConfirm;
-    private EditText refreshInput;
-    private EditText portInput;
-    private CheckBox requirePassBox;
-    private CheckBox checkSystemBox;
-    private Button btn26;
-    private Button btnOpenLog;
-    private Button btnLoadList;
 
     private EditText regMailIndex;
     private EditText regPChannel;
@@ -45,27 +34,28 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText regCallsign;
     private EditText regCity;
 
-    /* File picker для list.txt. */
-    private ActivityResultLauncher<String[]> filePicker;
+    private VoxView voxView;
+    private TextView voxStateText;
+
+    private Handler handler;
+    private final Runnable uiLoop = new Runnable() {
+        @Override
+        public void run() {
+            refreshVoxUi();
+            handler.postDelayed(this, 100);
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
         setContentView(R.layout.activity_settings);
 
         passCurrent = findViewById(R.id.passCurrent);
         passNew     = findViewById(R.id.passNew);
         passConfirm = findViewById(R.id.passConfirm);
-        refreshInput = findViewById(R.id.refreshInput);
-        portInput = findViewById(R.id.portInput);
-        requirePassBox = findViewById(R.id.requirePassBox);
-        checkSystemBox = findViewById(R.id.checkSystemBox);
-        btn26 = findViewById(R.id.btn26);
-        btnOpenLog = findViewById(R.id.btnOpenLog);
-        btnLoadList = findViewById(R.id.btnLoadList);
 
         regMailIndex = findViewById(R.id.regMailIndex);
         regPChannel  = findViewById(R.id.regPChannel);
@@ -75,56 +65,46 @@ public class SettingsActivity extends AppCompatActivity {
         regCallsign  = findViewById(R.id.regCallsign);
         regCity      = findViewById(R.id.regCity);
 
+        voxView = findViewById(R.id.voxView);
+        voxStateText = findViewById(R.id.voxStateText);
+
         Button saveBtn = findViewById(R.id.btnSaveSettings);
         if (saveBtn != null) saveBtn.setOnClickListener(v -> saveSettings());
 
-        if (btn26 != null) btn26.setOnClickListener(v -> toggle26());
-
-        if (btnOpenLog != null) btnOpenLog.setOnClickListener(v -> {
+        Button openLogBtn = findViewById(R.id.btnOpenLog);
+        if (openLogBtn != null) openLogBtn.setOnClickListener(v -> {
             Intent i = new Intent(SettingsActivity.this, LogActivity.class);
             startActivity(i);
         });
 
-        /* Регистрация file picker для list.txt. */
-        filePicker = registerForActivityResult(
-                new ActivityResultContracts.OpenDocument(),
-                uri -> {
-                    if (uri != null) applyListFile(uri);
-                });
-
-        if (btnLoadList != null) {
-            btnLoadList.setOnClickListener(v ->
-                    filePicker.launch(new String[]{"text/plain", "*/*"}));
-        }
+        Button saveVoxBtn = findViewById(R.id.btnSaveVox);
+        if (saveVoxBtn != null) saveVoxBtn.setOnClickListener(v -> saveVox());
 
         loadSettings();
+
+        handler = new Handler(Looper.getMainLooper());
+        handler.post(uiLoop);
     }
 
-    /* Применить выбранный list.txt. */
-    private void applyListFile(Uri uri) {
-        try {
-            InputStream is = getContentResolver().openInputStream(uri);
-            if (is == null) {
-                Toast.makeText(this, R.string.toast_list_error,
-                        Toast.LENGTH_SHORT).show();
-                return;
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (handler != null) handler.removeCallbacks(uiLoop);
+    }
+
+    /* Обновление UI VOX — 10 раз в секунду. */
+    private void refreshVoxUi() {
+        if (voxView == null) return;
+        if (PmrService.voxEngine != null) {
+            voxView.setCurrentRms(PmrService.voxEngine.getLastRms());
+            if (voxStateText != null) {
+                voxStateText.setText(PmrService.voxEngine.isTxActive()
+                        ? "СОСТОЯНИЕ: ПЕРЕДАЧА"
+                        : "СОСТОЯНИЕ: ГОТОВ");
             }
-            int n = PmrService.listFile.loadFromStream(is);
-            is.close();
-
-            File dest = new File(getFilesDir(), "list.txt");
-            PmrService.listFile.save(dest);
-
-            if (PmrService.chanList != null) PmrService.chanList.clear();
-            if (PmrService.pmrSocket != null) PmrService.pmrSocket.sendList();
-
-            Toast.makeText(this,
-                    getString(R.string.toast_list_loaded, n),
-                    Toast.LENGTH_SHORT).show();
-        } catch (Exception e) {
-            AppLog.add("applyListFile error: " + e);
-            Toast.makeText(this, R.string.toast_list_error,
-                    Toast.LENGTH_SHORT).show();
+        } else {
+            voxView.setCurrentRms(0);
+            if (voxStateText != null) voxStateText.setText("СОСТОЯНИЕ: —");
         }
     }
 
@@ -132,25 +112,7 @@ public class SettingsActivity extends AppCompatActivity {
         SharedPreferences sp = getSharedPreferences(
                 PasswordActivity.PREFS, MODE_PRIVATE);
 
-        int r = sp.getInt(PasswordActivity.KEY_REFRESH,
-                PasswordActivity.DEFAULT_REFRESH);
-        if (refreshInput != null) refreshInput.setText(String.valueOf(r));
-
-        int p = sp.getInt(PasswordActivity.KEY_PORT_PRM,
-                PasswordActivity.DEFAULT_PORT_PRM);
-        if (portInput != null) portInput.setText(String.valueOf(p));
-
-        boolean requirePass = sp.getBoolean(
-                PasswordActivity.KEY_REQUIRE_PASSWORD, true);
-        if (requirePassBox != null) requirePassBox.setChecked(requirePass);
-
-        boolean checkSystem = sp.getBoolean(
-                PasswordActivity.KEY_CHECK_SYSTEM, true);
-        if (checkSystemBox != null) checkSystemBox.setChecked(checkSystem);
-
-        boolean on26 = sp.getBoolean(PasswordActivity.KEY_26_STATE, false);
-        updateBtn26(on26);
-
+        /* Регистрационные. */
         if (regMailIndex != null)
             regMailIndex.setText(sp.getString(
                     PasswordActivity.KEY_MY_MAIL_INDEX,
@@ -179,47 +141,38 @@ public class SettingsActivity extends AppCompatActivity {
             regCity.setText(sp.getString(
                     PasswordActivity.KEY_CITY,
                     PasswordActivity.DEFAULT_CITY));
+
+        /* VOX. */
+        if (voxView != null) {
+            int myVox = sp.getInt(PasswordActivity.KEY_MY_VOX,
+                    PasswordActivity.DEFAULT_MY_VOX);
+            int voxPause = sp.getInt(PasswordActivity.KEY_VOX_PAUSE,
+                    PasswordActivity.DEFAULT_VOX_PAUSE);
+            voxView.setMyVox(myVox);
+            voxView.setVoxPause(voxPause);
+        }
     }
 
-    private void toggle26() {
+    /* Сохранить только VOX. */
+    private void saveVox() {
+        if (voxView == null) return;
         SharedPreferences sp = getSharedPreferences(
                 PasswordActivity.PREFS, MODE_PRIVATE);
-        boolean on26 = sp.getBoolean(PasswordActivity.KEY_26_STATE, false);
-        boolean newState = !on26;
-
-        if (PmrService.pmrSocket == null) {
-            Toast.makeText(this, R.string.toast_26_null,
-                    Toast.LENGTH_SHORT).show();
-            return;
-        }
-        PmrService.pmrSocket.send260(newState ? 1 : 0);
-
-        sp.edit().putBoolean(PasswordActivity.KEY_26_STATE, newState).apply();
-        updateBtn26(newState);
-
-        Toast.makeText(this,
-                newState ? R.string.toast_26_on : R.string.toast_26_off,
-                Toast.LENGTH_SHORT).show();
+        sp.edit()
+                .putInt(PasswordActivity.KEY_MY_VOX, voxView.getMyVox())
+                .putInt(PasswordActivity.KEY_VOX_PAUSE, voxView.getVoxPause())
+                .apply();
+        Toast.makeText(this, "VOX сохранён", Toast.LENGTH_SHORT).show();
     }
 
-    private void updateBtn26(boolean on) {
-        if (btn26 == null) return;
-        if (on) {
-            btn26.setText(R.string.btn_26_on);
-            btn26.setBackgroundTintList(getColorStateList(R.color.c_green));
-        } else {
-            btn26.setText(R.string.btn_26_off);
-            btn26.setBackgroundTintList(getColorStateList(R.color.c_red));
-        }
-    }
-
+    /* Сохранить всё. */
     private void saveSettings() {
         SharedPreferences sp = getSharedPreferences(
                 PasswordActivity.PREFS, MODE_PRIVATE);
 
+        /* Смена пароля. */
         String cur = sp.getString(PasswordActivity.KEY_PASSWORD,
                 PasswordActivity.DEFAULT_PASSWORD);
-
         String enteredCur = passCurrent.getText().toString();
         String newPass = passNew.getText().toString();
         String confirmPass = passConfirm.getText().toString();
@@ -243,52 +196,15 @@ public class SettingsActivity extends AppCompatActivity {
             sp.edit().putString(PasswordActivity.KEY_PASSWORD, newPass).apply();
         }
 
-        int refresh = PasswordActivity.DEFAULT_REFRESH;
-        try {
-            String rs = refreshInput.getText().toString().trim();
-            if (!rs.isEmpty()) {
-                int v = Integer.parseInt(rs);
-                if (v >= 1 && v <= 60) refresh = v;
-                else {
-                    Toast.makeText(this, "Частота: 1..60",
-                            Toast.LENGTH_SHORT).show();
-                    return;
-                }
-            }
-        } catch (NumberFormatException e) {
-            Toast.makeText(this, "Частота: число",
-                    Toast.LENGTH_SHORT).show();
-            return;
+        /* VOX. */
+        if (voxView != null) {
+            sp.edit()
+                    .putInt(PasswordActivity.KEY_MY_VOX, voxView.getMyVox())
+                    .putInt(PasswordActivity.KEY_VOX_PAUSE, voxView.getVoxPause())
+                    .apply();
         }
-        sp.edit().putInt(PasswordActivity.KEY_REFRESH, refresh).apply();
 
-        int port = PasswordActivity.DEFAULT_PORT_PRM;
-        try {
-            String ps = portInput.getText().toString().trim();
-            if (!ps.isEmpty()) {
-                int v = Integer.parseInt(ps);
-                if (v >= 1024 && v <= 65535) port = v;
-                else {
-                    Toast.makeText(this, "Порт: 1024..65535",
-                            Toast.LENGTH_SHORT).show();
-                    return;
-                }
-            }
-        } catch (NumberFormatException e) {
-            Toast.makeText(this, "Порт: число",
-                    Toast.LENGTH_SHORT).show();
-            return;
-        }
-        sp.edit().putInt(PasswordActivity.KEY_PORT_PRM, port).apply();
-
-        boolean requirePass = requirePassBox != null && requirePassBox.isChecked();
-        sp.edit().putBoolean(PasswordActivity.KEY_REQUIRE_PASSWORD,
-                requirePass).apply();
-
-        boolean checkSystem = checkSystemBox != null && checkSystemBox.isChecked();
-        sp.edit().putBoolean(PasswordActivity.KEY_CHECK_SYSTEM,
-                checkSystem).apply();
-
+        /* Регистрационные. */
         String myMailIndex = (regMailIndex != null)
                 ? regMailIndex.getText().toString().trim() : "";
         String myPChannel = (regPChannel != null)
@@ -319,16 +235,9 @@ public class SettingsActivity extends AppCompatActivity {
         if (!city.isEmpty()) sp.edit().putString(
                 PasswordActivity.KEY_CITY, city).apply();
 
+        /* Применить настройки. */
         if (PmrService.pmrSocket != null) {
             PmrService.pmrSocket.reloadFromPrefs(this);
-        }
-
-        if (PmrService.pmrSocket != null
-                && !priznak.isEmpty()
-                && !callsign.isEmpty()
-                && !city.isEmpty()) {
-            String cmd = priznak + " " + callsign + " " + city;
-            PmrService.pmrSocket.sendRename(cmd);
         }
 
         Toast.makeText(this, R.string.settings_saved,

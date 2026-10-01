@@ -14,11 +14,11 @@ import androidx.core.app.NotificationCompat;
 import java.io.File;
 import java.io.InputStream;
 
-/* Foreground Service V3.2.
+/* Foreground Service Android Link PMR V1.0.
  *
- * Изменения V3.2:
- *   - создаётся AudioEngine и связывается с PmrSocket;
- *   - при уничтожении службы AudioEngine освобождает все AudioTrack и AudioRecord.
+ * Изменения V1.0:
+ *   - создаётся VoxEngine и запускается;
+ *   - PTT больше не используется.
  */
 public class PmrService extends Service {
 
@@ -32,12 +32,13 @@ public class PmrService extends Service {
     public static CmdQueue cmdQueue;
     public static PmrSocket pmrSocket;
     public static AudioEngine audioEngine;
+    public static VoxEngine voxEngine;
 
     @Override
     public void onCreate() {
         super.onCreate();
 
-        AppLog.add("PmrService.onCreate() — старт V3.2");
+        AppLog.add("PmrService.onCreate() — старт V1.0 Android Link PMR");
 
         File dir = getFilesDir();
         File listTxt = new File(dir, "list.txt");
@@ -71,12 +72,15 @@ public class PmrService extends Service {
         audioEngine.startPlaying();
         pmrSocket.setAudioEngine(audioEngine);
 
+        voxEngine = new VoxEngine(getApplicationContext(), pmrSocket);
+        voxEngine.start();
+
         pmrSocket.start();
 
         createChannel();
         startForeground(NOTIF_ID, buildNotification());
 
-        AppLog.add("PmrService: служба запущена, аудио инициализировано");
+        AppLog.add("PmrService: служба запущена, VOX активен");
     }
 
     @Override
@@ -87,8 +91,10 @@ public class PmrService extends Service {
     @Override
     public void onDestroy() {
         AppLog.add("PmrService.onDestroy()");
+        if (voxEngine != null) {
+            try { voxEngine.stop(); } catch (Exception ignored) {}
+        }
         if (audioEngine != null) {
-            try { audioEngine.stopRecording(); } catch (Exception ignored) {}
             try { audioEngine.stopPlaying(); } catch (Exception ignored) {}
         }
         if (pmrSocket != null) pmrSocket.stop();

@@ -9,9 +9,8 @@ import android.view.WindowManager;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран приветствия V2.6.
- * Экран НЕ ГАСНЕТ во время показа (FLAG_KEEP_SCREEN_ON).
- * Показывается 5 секунд, затем передаёт управление.
+/* Экран приветствия Android Link PMR V1.0.
+ * Показывается 5 секунд.
  */
 public class SplashActivity extends AppCompatActivity {
 

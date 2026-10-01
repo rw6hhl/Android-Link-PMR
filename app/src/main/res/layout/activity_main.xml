@@ -3,53 +3,40 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
+    android:gravity="center"
+    android:padding="24dp"
     android:background="@color/c_bg">
 
     <TextView
-        android:id="@+id/listTitle"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:padding="10dp"
-        android:text="@string/list_title"
-        android:textColor="@color/c_white"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        android:gravity="center"
-        android:background="@color/c_blue" />
+        android:text="@string/app_name"
+        android:textColor="@color/c_blue"
+        android:textSize="32sp"
+        android:textStyle="bold" />
 
     <Button
         android:id="@+id/btnSettings"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginTop="48dp"
         android:text="@string/btn_settings"
         android:backgroundTint="@color/c_green"
         android:textColor="@color/c_white"
-        android:textSize="18sp"
-        android:paddingTop="12dp"
-        android:paddingBottom="12dp" />
-
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recyclerChan"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:padding="4dp"
-        android:clipToPadding="false" />
-
-    <!-- Кнопка PTT — нажать и держать для передачи.
-         При нажатии окрашивается в красный, при отпускании — обратно в синий. -->
-    <Button
-        android:id="@+id/btnPtt"
-        android:layout_width="match_parent"
-        android:layout_height="80dp"
-        android:layout_marginLeft="12dp"
-        android:layout_marginRight="12dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="12dp"
-        android:text="@string/btn_ptt"
         android:textSize="22sp"
-        android:textStyle="bold"
+        android:paddingTop="20dp"
+        android:paddingBottom="20dp" />
+
+    <Button
+        android:id="@+id/btnLogs"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="@string/settings_log_open"
+        android:backgroundTint="@color/c_blue"
         android:textColor="@color/c_white"
-        android:backgroundTint="@color/c_blue" />
+        android:textSize="22sp"
+        android:paddingTop="20dp"
+        android:paddingBottom="20dp" />
 
 </LinearLayout>
