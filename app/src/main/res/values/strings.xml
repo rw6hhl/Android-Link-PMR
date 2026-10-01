@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Android Link PMR</string>
-    <string name="app_version">V1.2</string>
+    <string name="app_version">V1.3</string>
 
     <string name="password_hint">Пароль</string>
     <string name="password_btn">ВОЙТИ</string>
@@ -47,7 +47,6 @@
     <string name="toast_26_on">261 отправлено (включить)</string>
     <string name="toast_26_null">Служба не готова</string>
 
-    <!-- Восстановлено для item_chan.xml и ChanAdapter.java (не используется в V1.2) -->
     <string name="ban_on">БАН</string>
     <string name="ban_off">БАН</string>
     <string name="toast_ban_sent">Бан отправлен b%1$d</string>
