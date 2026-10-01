@@ -1,6 +1,5 @@
 package com.pmr.admin;
 
-import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
@@ -15,13 +14,7 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран настроек Android Link PMR V1.2.
- *
- * Изменения V1.2:
- *   - вернули галочку «Требовать пароль при запуске»;
- *   - USB-статус — из AudioDeviceWatcher (без своего getDevices);
- *   - VOX UI обновляется 10 раз в секунду.
- */
+/* Экран настроек Android Link PMR V1.1. */
 public class SettingsActivity extends AppCompatActivity {
 
     private EditText passCurrent;
@@ -39,14 +32,12 @@ public class SettingsActivity extends AppCompatActivity {
 
     private VoxView voxView;
     private TextView voxStateText;
-    private TextView usbStatusText;
 
     private Handler handler;
     private final Runnable uiLoop = new Runnable() {
         @Override
         public void run() {
             refreshVoxUi();
-            refreshUsbUi();
             handler.postDelayed(this, 100);
         }
     };
@@ -73,7 +64,6 @@ public class SettingsActivity extends AppCompatActivity {
 
         voxView = findViewById(R.id.voxView);
         voxStateText = findViewById(R.id.voxStateText);
-        usbStatusText = findViewById(R.id.usbStatusText);
 
         Button saveBtn = findViewById(R.id.btnSaveSettings);
         if (saveBtn != null) saveBtn.setOnClickListener(v -> saveSettings());
@@ -108,22 +98,6 @@ public class SettingsActivity extends AppCompatActivity {
         } else {
             voxView.setCurrentRms(0);
             if (voxStateText != null) voxStateText.setText("СОСТОЯНИЕ: —");
-        }
-    }
-
-    private void refreshUsbUi() {
-        if (usbStatusText == null) return;
-        if (PmrService.deviceWatcher == null) {
-            usbStatusText.setText("USB-аудио: проверка недоступна");
-            return;
-        }
-        PmrService.deviceWatcher.scan();
-        if (PmrService.deviceWatcher.isUsbConnected()) {
-            String name = PmrService.deviceWatcher.getUsbName();
-            if (name == null || name.isEmpty()) name = "USB-аудио";
-            usbStatusText.setText("USB-аудио: ПОДКЛЮЧЕНО — " + name);
-        } else {
-            usbStatusText.setText("USB-аудио: НЕ ПОДКЛЮЧЕНО (используется встроенное)");
         }
     }
 

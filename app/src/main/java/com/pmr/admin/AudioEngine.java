@@ -5,12 +5,7 @@ import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
 
-/* Звуковой движок Android Link PMR V1.2.
- *
- * Изменения V1.2:
- *   - при смене USB-аудио вызывается rebuildTracks() — пересоздание AudioTrack[];
- *   - при ошибке write() — поток не падает.
- */
+/* Звуковой движок Android Link PMR V1.1. */
 public class AudioEngine {
 
     public static final int CMD_PCM8_16K  = 19;
@@ -43,21 +38,7 @@ public class AudioEngine {
 
     public void startPlaying() {
         if (isPlaying) return;
-        buildTracks();
-        isPlaying = true;
-        AppLog.add("AudioEngine: startPlaying, volume=" + VOLUME_BOOST
-                + ", slots=" + tracks.length);
-    }
 
-    /* Пересоздать AudioTrack[] при смене устройства. */
-    public void rebuildTracks() {
-        if (!isPlaying) return;
-        AppLog.add("AudioEngine: rebuildTracks()");
-        releaseTracks();
-        buildTracks();
-    }
-
-    private void buildTracks() {
         for (int i = 0; i < SLOTS_PER_FORMAT; i++) {
             if (tracks[i] == null) {
                 tracks[i] = new AudioTrack(
@@ -86,9 +67,13 @@ public class AudioEngine {
                 try { tracks[i].setVolume(VOLUME_BOOST); } catch (Exception ignored) {}
             }
         }
+        isPlaying = true;
+        AppLog.add("AudioEngine: startPlaying, volume=" + VOLUME_BOOST
+                + ", slots=" + tracks.length);
     }
 
-    private void releaseTracks() {
+    public void stopPlaying() {
+        isPlaying = false;
         for (int i = 0; i < tracks.length; i++) {
             if (tracks[i] != null) {
                 try {
@@ -99,11 +84,6 @@ public class AudioEngine {
                 tracks[i] = null;
             }
         }
-    }
-
-    public void stopPlaying() {
-        isPlaying = false;
-        releaseTracks();
     }
 
     private boolean isValid16(int client) {

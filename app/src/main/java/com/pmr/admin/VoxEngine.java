@@ -6,13 +6,8 @@ import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 
-/* VOX-движок Android Link PMR V1.3.
- *
- * Изменения V1.3:
- *   - убрана проверка getState() — на части устройств она ошибочно
- *     возвращает STATE_UNINITIALIZED, из-за чего VoxEngine не стартовал;
- *   - убрано heartbeat-пересоздание AudioRecord — оно блокировало передачу;
- *   - оставлен try/catch в read() и rebuildRecorder() для USB-событий.
+/* VOX-движок Android Link PMR V1.1.
+ * Простой вариант: AudioRecord + поток, без heartbeat и getState.
  */
 public class VoxEngine {
 
@@ -42,30 +37,7 @@ public class VoxEngine {
 
     public void start() {
         if (running) return;
-        if (!openRecorder()) return;
 
-        running = true;
-        voxThread = new Thread(this::loop, "vox-loop");
-        voxThread.start();
-        AppLog.add("VoxEngine: поток запущен");
-    }
-
-    public void stop() {
-        running = false;
-        closeRecorder();
-        voxThread = null;
-        AppLog.add("VoxEngine: поток остановлен");
-    }
-
-    /* Пересоздать AudioRecord при смене USB-устройства. */
-    public void rebuildRecorder() {
-        if (!running) return;
-        AppLog.add("VoxEngine: rebuildRecorder()");
-        closeRecorder();
-        openRecorder();
-    }
-
-    private boolean openRecorder() {
         try {
             recorder = new AudioRecord(
                     MediaRecorder.AudioSource.MIC,
@@ -75,15 +47,20 @@ public class VoxEngine {
                     BUF_SIZE * 2);
             recorder.startRecording();
             AppLog.add("VoxEngine: AudioRecord init OK");
-            return true;
         } catch (Exception e) {
             AppLog.add("VoxEngine: ошибка AudioRecord — " + e);
             recorder = null;
-            return false;
+            return;
         }
+
+        running = true;
+        voxThread = new Thread(this::loop, "vox-loop");
+        voxThread.start();
+        AppLog.add("VoxEngine: поток запущен");
     }
 
-    private void closeRecorder() {
+    public void stop() {
+        running = false;
         if (recorder != null) {
             try {
                 recorder.stop();
@@ -91,6 +68,8 @@ public class VoxEngine {
             } catch (Exception ignored) {}
             recorder = null;
         }
+        voxThread = null;
+        AppLog.add("VoxEngine: поток остановлен");
     }
 
     private void loop() {
@@ -104,10 +83,7 @@ public class VoxEngine {
             try {
                 read = recorder.read(pcm16, 0, pcm16.length);
             } catch (Exception e) {
-                AppLog.add("VoxEngine: read exception — " + e);
-                closeRecorder();
-                openRecorder();
-                continue;
+                break;
             }
             if (read <= 0) continue;
 
