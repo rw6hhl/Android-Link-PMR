@@ -8,12 +8,14 @@ import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 
-/* VOX-движок Android Link PMR V1.6.
+/* VOX-движок Android Link PMR V1.7.
  *
- * Изменения V1.6:
- *   - масштаб RMS: делитель 25.0 (было 32.0) —
- *     100 = тихий, 500 = средний, 800 = громкий голос;
- *   - остальное как в V1.5.
+ * Изменения V1.7:
+ *   - добавлено усиление микрофона vox_mic (0..100);
+ *   - vox_mic = 0 → усиление отключено (1.0x);
+ *   - vox_mic = 100 → MicUsildouble = 2.0x;
+ *   - усиление применяется ДО расчёта RMS — чтобы порог срабатывал
+ *     на усиленном сигнале.
  */
 public class VoxEngine {
 
@@ -22,8 +24,11 @@ public class VoxEngine {
     private static final int BYTES_PER_ELEM = 2;
     private static final int BUF_SIZE = BUF_ELEMENTS * BYTES_PER_ELEM;
 
-    /* Делитель RMS для шкалы 0..1000. */
+    /* Шкала RMS: 100 = тихий, 500 = средний, 800 = громкий. */
     private static final double RMS_DIVISOR = 25.0;
+
+    /* Флаги усиления. */
+    private static final int onUsilMic = 1;
 
     private final Context appCtx;
     private final PmrSocket pmrSocket;
@@ -127,20 +132,25 @@ public class VoxEngine {
             }
             if (read <= 0) continue;
 
-            int rms = calcRms(pcm16, read);
-            lastRms = rms;
-
             SharedPreferences sp = appCtx.getSharedPreferences(
                     PasswordActivity.PREFS, Context.MODE_PRIVATE);
             int myVox = sp.getInt(PasswordActivity.KEY_MY_VOX,
                     PasswordActivity.DEFAULT_MY_VOX);
             int voxPause = sp.getInt(PasswordActivity.KEY_VOX_PAUSE,
                     PasswordActivity.DEFAULT_VOX_PAUSE);
+            int voxMic = sp.getInt(PasswordActivity.KEY_VOX_MIC,
+                    PasswordActivity.DEFAULT_VOX_MIC);
+
+            /* Усиление микрофона — до расчёта RMS. */
+            byte[] amplified = applyMicGain(pcm16, read, voxMic);
+
+            int rms = calcRms(amplified, read);
+            lastRms = rms;
 
             diagCounter++;
             if (diagCounter >= 50) {
                 AppLog.add("VoxEngine: rms=" + rms + ", vox=" + myVox
-                        + ", tx=" + txActive);
+                        + ", mic=" + voxMic + ", tx=" + txActive);
                 diagCounter = 0;
             }
 
@@ -160,7 +170,7 @@ public class VoxEngine {
                     AppLog.add("VoxEngine: TX ON (rms=" + rms
                             + ", vox=" + myVox + ")");
                 }
-                sendFrame(pcm16, read, g711buf);
+                sendFrame(amplified, read, g711buf);
             } else {
                 if (txActive) {
                     silentTicks++;
@@ -170,11 +180,32 @@ public class VoxEngine {
                                 + silentTicks + ", pause=" + voxPause + ")");
                         silentTicks = 0;
                     } else {
-                        sendFrame(pcm16, read, g711buf);
+                        sendFrame(amplified, read, g711buf);
                     }
                 }
             }
         }
+    }
+
+    /* Усиление микрофона: 0..100 → 1.0..2.0. vox_mic=0 → 1.0. */
+    private byte[] applyMicGain(byte[] pcm, int len, int voxMic) {
+        if (onUsilMic == 0 || voxMic <= 0) {
+            return pcm;
+        }
+        double micUsil = (double) voxMic / 50.0;
+        if (micUsil <= 1.0) {
+            return pcm;
+        }
+        byte[] out = new byte[len];
+        for (int i = 0; i < len; i += 2) {
+            short s = (short) ((pcm[i] & 0xFF) | (pcm[i + 1] << 8));
+            int amplified = (int) (s * micUsil);
+            if (amplified > 32767) amplified = 32767;
+            if (amplified < -32768) amplified = -32768;
+            out[i] = (byte) (amplified & 0xFF);
+            out[i + 1] = (byte) ((amplified >> 8) & 0xFF);
+        }
+        return out;
     }
 
     private void sendFrame(byte[] pcm16, int read, byte[] g711buf) {

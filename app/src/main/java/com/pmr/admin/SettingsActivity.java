@@ -18,10 +18,12 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
-/* Экран настроек Android Link PMR V1.6.
+/* Экран настроек Android Link PMR V1.7.
  *
- * Изменения V1.6:
- *   - vox_pause снова в тиках (без пересчёта в секунды).
+ * Изменения V1.7:
+ *   - добавлено поле vox_mic (0..100) — усиление микрофона;
+ *   - добавлена строка My_Vox=N — текущее значение маркера;
+ *   - сохранение/загрузка vox_mic.
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -39,11 +41,13 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText regCity;
 
     private EditText voxPauseInput;
+    private EditText voxMicInput;
 
     private VoxView voxView;
     private TextView voxStateText;
     private TextView voxLevelText;
     private TextView rxLevelText;
+    private TextView myVoxText;
     private TextView usbStatusText;
     private Button btnLockVox;
 
@@ -83,8 +87,10 @@ public class SettingsActivity extends AppCompatActivity {
         voxStateText = findViewById(R.id.voxStateText);
         voxLevelText = findViewById(R.id.voxLevelText);
         rxLevelText  = findViewById(R.id.rxLevelText);
+        myVoxText    = findViewById(R.id.myVoxText);
         usbStatusText = findViewById(R.id.usbStatusText);
         voxPauseInput = findViewById(R.id.voxPauseInput);
+        voxMicInput   = findViewById(R.id.voxMicInput);
         btnLockVox = findViewById(R.id.btnLockVox);
 
         Button saveBtn = findViewById(R.id.btnSaveSettings);
@@ -139,6 +145,8 @@ public class SettingsActivity extends AppCompatActivity {
         if (voxView != null) voxView.setCurrentRms(voxRms);
         if (voxLevelText != null) voxLevelText.setText("VOX=" + voxRms);
         if (rxLevelText != null) rxLevelText.setText("RX=" + rxRms);
+        if (myVoxText != null && voxView != null)
+            myVoxText.setText("My_Vox=" + voxView.getMyVox());
         if (voxStateText != null) {
             voxStateText.setText(txActive
                     ? "СОСТОЯНИЕ: ПЕРЕДАЧА"
@@ -215,11 +223,15 @@ public class SettingsActivity extends AppCompatActivity {
             voxView.setMyVox(myVox);
         }
 
-        /* vox_pause — тики (без пересчёта). */
         int voxPauseTicks = sp.getInt(PasswordActivity.KEY_VOX_PAUSE,
                 PasswordActivity.DEFAULT_VOX_PAUSE);
         if (voxPauseInput != null)
             voxPauseInput.setText(String.valueOf(voxPauseTicks));
+
+        int voxMic = sp.getInt(PasswordActivity.KEY_VOX_MIC,
+                PasswordActivity.DEFAULT_VOX_MIC);
+        if (voxMicInput != null)
+            voxMicInput.setText(String.valueOf(voxMic));
     }
 
     private void saveSettings() {
@@ -234,13 +246,21 @@ public class SettingsActivity extends AppCompatActivity {
             sp.edit().putInt(PasswordActivity.KEY_MY_VOX, voxView.getMyVox()).apply();
         }
 
-        /* vox_pause в тиках. */
         if (voxPauseInput != null) {
             try {
                 int ticks = Integer.parseInt(voxPauseInput.getText().toString().trim());
                 if (ticks < 1) ticks = 1;
                 if (ticks > 1000) ticks = 1000;
                 sp.edit().putInt(PasswordActivity.KEY_VOX_PAUSE, ticks).apply();
+            } catch (NumberFormatException ignored) {}
+        }
+
+        if (voxMicInput != null) {
+            try {
+                int v = Integer.parseInt(voxMicInput.getText().toString().trim());
+                if (v < 0) v = 0;
+                if (v > 100) v = 100;
+                sp.edit().putInt(PasswordActivity.KEY_VOX_MIC, v).apply();
             } catch (NumberFormatException ignored) {}
         }
 

@@ -10,11 +10,11 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран ввода пароля Android Link PMR V1.1.
+/* Экран ввода пароля Android Link PMR V1.7.
  *
- * Изменения V1.1:
- *   - DEFAULT_MY_VOX = 400;
- *   - DEFAULT_VOX_PAUSE = 15.
+ * Изменения V1.7:
+ *   - DEFAULT_PRIZNAK_PMR = "26000";
+ *   - добавлены KEY_VOX_MIC, DEFAULT_VOX_MIC = 50 (1.0x).
  */
 public class PasswordActivity extends AppCompatActivity {
 
@@ -36,6 +36,7 @@ public class PasswordActivity extends AppCompatActivity {
 
     public static final String KEY_MY_VOX     = "my_vox";
     public static final String KEY_VOX_PAUSE  = "vox_pause";
+    public static final String KEY_VOX_MIC    = "vox_mic";
 
     public static final String DEFAULT_PASSWORD = "Rostov2026";
     public static final int    DEFAULT_REFRESH = 2;
@@ -43,7 +44,7 @@ public class PasswordActivity extends AppCompatActivity {
 
     public static final String DEFAULT_MY_MAIL_INDEX = "51953";
     public static final String DEFAULT_MY_PCHANNEL   = "5";
-    public static final String DEFAULT_PRIZNAK_PMR   = "11777";
+    public static final String DEFAULT_PRIZNAK_PMR   = "26000";
     public static final String DEFAULT_IP_SERVER     = "185.221.154.39";
     public static final String DEFAULT_IP_SERVER2    = "109.172.7.155";
     public static final String DEFAULT_CALLSIGN      = "RW6HHL";
@@ -51,6 +52,7 @@ public class PasswordActivity extends AppCompatActivity {
 
     public static final int DEFAULT_MY_VOX    = 400;
     public static final int DEFAULT_VOX_PAUSE = 15;
+    public static final int DEFAULT_VOX_MIC   = 50;
 
     private EditText passInput;
 

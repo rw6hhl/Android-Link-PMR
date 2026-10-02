@@ -70,6 +70,15 @@
                 android:backgroundTint="@color/c_gray" />
         </LinearLayout>
 
+        <TextView
+            android:id="@+id/myVoxText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="My_Vox=400"
+            android:textSize="18sp"
+            android:textColor="@color/c_black" />
+
         <com.pmr.admin.VoxView
             android:id="@+id/voxView"
             android:layout_width="match_parent"
@@ -93,6 +102,30 @@
 
             <EditText
                 android:id="@+id/voxPauseInput"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="number"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="4dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="180dp"
+                android:text="vox_mic  ="
+                android:textSize="16sp"
+                android:textColor="@color/c_black" />
+
+            <EditText
+                android:id="@+id/voxMicInput"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
