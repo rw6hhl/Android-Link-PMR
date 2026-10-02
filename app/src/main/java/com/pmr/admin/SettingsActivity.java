@@ -18,12 +18,10 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
-/* Экран настроек Android Link PMR V1.5.
+/* Экран настроек Android Link PMR V1.6.
  *
- * Изменения V1.5:
- *   - vox_pause в секундах (EditText);
- *   - строка VOX=N RX=N + кнопка «ЗАФИКСИРОВАТЬ»;
- *   - зафиксированная метка My_Vox не двигается.
+ * Изменения V1.6:
+ *   - vox_pause снова в тиках (без пересчёта в секунды).
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -217,12 +215,11 @@ public class SettingsActivity extends AppCompatActivity {
             voxView.setMyVox(myVox);
         }
 
-        /* vox_pause хранится в тиках, показывается в секундах. */
+        /* vox_pause — тики (без пересчёта). */
         int voxPauseTicks = sp.getInt(PasswordActivity.KEY_VOX_PAUSE,
                 PasswordActivity.DEFAULT_VOX_PAUSE);
-        int voxPauseSec = (int) Math.round(voxPauseTicks / 50.0);
-        if (voxPauseSec < 1) voxPauseSec = 1;
-        if (voxPauseInput != null) voxPauseInput.setText(String.valueOf(voxPauseSec));
+        if (voxPauseInput != null)
+            voxPauseInput.setText(String.valueOf(voxPauseTicks));
     }
 
     private void saveSettings() {
@@ -237,13 +234,13 @@ public class SettingsActivity extends AppCompatActivity {
             sp.edit().putInt(PasswordActivity.KEY_MY_VOX, voxView.getMyVox()).apply();
         }
 
-        /* vox_pause в секундах → тики. */
+        /* vox_pause в тиках. */
         if (voxPauseInput != null) {
             try {
-                int sec = Integer.parseInt(voxPauseInput.getText().toString().trim());
-                if (sec < 1) sec = 1;
-                if (sec > 20) sec = 20;
-                sp.edit().putInt(PasswordActivity.KEY_VOX_PAUSE, sec * 50).apply();
+                int ticks = Integer.parseInt(voxPauseInput.getText().toString().trim());
+                if (ticks < 1) ticks = 1;
+                if (ticks > 1000) ticks = 1000;
+                sp.edit().putInt(PasswordActivity.KEY_VOX_PAUSE, ticks).apply();
             } catch (NumberFormatException ignored) {}
         }
 

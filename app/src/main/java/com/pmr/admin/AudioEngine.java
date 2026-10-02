@@ -6,11 +6,11 @@ import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
 
-/* Звуковой движок Android Link PMR V1.5.
+/* Звуковой движок Android Link PMR V1.6.
  *
- * Изменения V1.5:
- *   - добавлено поле lastRxRms — уровень принимаемого сигнала (0..1000);
- *   - остальное без изменений относительно V1.4.
+ * Изменения V1.6:
+ *   - делитель lastRxRms = 25.0 (было 32.0);
+ *   - остальное как в V1.5.
  */
 public class AudioEngine {
 
@@ -27,6 +27,7 @@ public class AudioEngine {
     private static final int OFFSET_8K = 20;
 
     private static final float VOLUME_BOOST = 1.7f;
+    private static final double RMS_DIVISOR = 25.0;
 
     private final Context appCtx;
     private final PmrSocket pmrSocket;
@@ -34,8 +35,6 @@ public class AudioEngine {
 
     private AudioTrack[] tracks = new AudioTrack[40];
     private volatile boolean isPlaying = false;
-
-    /* Уровень принимаемого сигнала (0..1000). */
     private volatile int lastRxRms = 0;
 
     public AudioEngine(Context ctx, PmrSocket sock) {
@@ -135,7 +134,6 @@ public class AudioEngine {
         return client >= 0 && client < SLOTS_PER_FORMAT;
     }
 
-    /* RMS по принятому буферу PCM (после декодирования). */
     private void updateRxRms(byte[] pcm, int len) {
         long sum = 0;
         int n = len / 2;
@@ -146,7 +144,7 @@ public class AudioEngine {
         if (n == 0) { lastRxRms = 0; return; }
         double mean = (double) sum / n;
         double rms = Math.sqrt(mean);
-        int scaled = (int) (rms / 32.0);
+        int scaled = (int) (rms / RMS_DIVISOR);
         if (scaled > 1000) scaled = 1000;
         lastRxRms = scaled;
     }

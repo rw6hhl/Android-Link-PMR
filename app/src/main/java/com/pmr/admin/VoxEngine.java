@@ -8,13 +8,12 @@ import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 
-/* VOX-движок Android Link PMR V1.4.
+/* VOX-движок Android Link PMR V1.6.
  *
- * Изменения V1.4:
- *   - при старте определяется текущее аудиоустройство и пишется в лог;
- *   - AudioRecord создаётся с учётом активного устройства;
- *   - никакого heartbeat и пересоздания — смена устройства требует
- *     перезапуска приложения (по решению пользователя).
+ * Изменения V1.6:
+ *   - масштаб RMS: делитель 25.0 (было 32.0) —
+ *     100 = тихий, 500 = средний, 800 = громкий голос;
+ *   - остальное как в V1.5.
  */
 public class VoxEngine {
 
@@ -22,6 +21,9 @@ public class VoxEngine {
     private static final int BUF_ELEMENTS = 320;
     private static final int BYTES_PER_ELEM = 2;
     private static final int BUF_SIZE = BUF_ELEMENTS * BYTES_PER_ELEM;
+
+    /* Делитель RMS для шкалы 0..1000. */
+    private static final double RMS_DIVISOR = 25.0;
 
     private final Context appCtx;
     private final PmrSocket pmrSocket;
@@ -83,7 +85,6 @@ public class VoxEngine {
         AppLog.add("VoxEngine: поток остановлен");
     }
 
-    /* Определение наличия USB-аудио. */
     private boolean isUsbPresent() {
         AudioManager am = (AudioManager) appCtx.getSystemService(Context.AUDIO_SERVICE);
         if (am == null) return false;
@@ -99,7 +100,6 @@ public class VoxEngine {
         return false;
     }
 
-    /* Логирование всех входных устройств при старте. */
     private void logCurrentAudioDevice(String tag) {
         AudioManager am = (AudioManager) appCtx.getSystemService(Context.AUDIO_SERVICE);
         if (am == null) return;
@@ -203,6 +203,7 @@ public class VoxEngine {
         pmrSocket.sendVoice(main, reserve);
     }
 
+    /* Масштаб 0..1000, делитель 25.0. */
     private static int calcRms(byte[] pcm, int len) {
         long sum = 0;
         int n = len / 2;
@@ -213,7 +214,7 @@ public class VoxEngine {
         if (n == 0) return 0;
         double mean = (double) sum / n;
         double rms = Math.sqrt(mean);
-        int scaled = (int) (rms / 32.0);
+        int scaled = (int) (rms / RMS_DIVISOR);
         if (scaled > 1000) scaled = 1000;
         return scaled;
     }
