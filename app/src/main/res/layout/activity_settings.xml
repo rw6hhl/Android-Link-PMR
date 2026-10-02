@@ -35,11 +35,72 @@
             android:textSize="16sp"
             android:textColor="@color/c_black" />
 
+        <!-- Строка: VOX=N   RX=N   [ЗАФИКСИРОВАТЬ] -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp">
+
+            <TextView
+                android:id="@+id/voxLevelText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="VOX=0"
+                android:textSize="18sp"
+                android:textColor="@color/c_black" />
+
+            <TextView
+                android:id="@+id/rxLevelText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="RX=0"
+                android:textSize="18sp"
+                android:textColor="@color/c_black" />
+
+            <Button
+                android:id="@+id/btnLockVox"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:minWidth="60dp"
+                android:minHeight="48dp"
+                android:backgroundTint="@color/c_gray" />
+        </LinearLayout>
+
         <com.pmr.admin.VoxView
             android:id="@+id/voxView"
             android:layout_width="match_parent"
             android:layout_height="180dp"
             android:layout_marginTop="8dp" />
+
+        <!-- vox_pause в секундах -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="180dp"
+                android:text="vox_pause (сек)  ="
+                android:textSize="16sp"
+                android:textColor="@color/c_black" />
+
+            <EditText
+                android:id="@+id/voxPauseInput"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="number"
+                android:textSize="16sp" />
+        </LinearLayout>
 
         <TextView
             android:layout_width="match_parent"

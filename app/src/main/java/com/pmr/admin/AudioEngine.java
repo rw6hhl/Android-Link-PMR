@@ -6,12 +6,11 @@ import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
 
-/* Звуковой движок Android Link PMR V1.4.
+/* Звуковой движок Android Link PMR V1.5.
  *
- * Изменения V1.4:
- *   - при старте определяется текущее аудиоустройство и пишется в лог;
- *   - AudioTrack создаются с учётом активного устройства;
- *   - смена устройства требует перезапуска приложения.
+ * Изменения V1.5:
+ *   - добавлено поле lastRxRms — уровень принимаемого сигнала (0..1000);
+ *   - остальное без изменений относительно V1.4.
  */
 public class AudioEngine {
 
@@ -36,12 +35,16 @@ public class AudioEngine {
     private AudioTrack[] tracks = new AudioTrack[40];
     private volatile boolean isPlaying = false;
 
+    /* Уровень принимаемого сигнала (0..1000). */
+    private volatile int lastRxRms = 0;
+
     public AudioEngine(Context ctx, PmrSocket sock) {
         this.appCtx = ctx;
         this.pmrSocket = sock;
     }
 
     public boolean isPlaying() { return isPlaying; }
+    public int getLastRxRms()  { return lastRxRms; }
 
     public void startPlaying() {
         if (isPlaying) return;
@@ -132,11 +135,28 @@ public class AudioEngine {
         return client >= 0 && client < SLOTS_PER_FORMAT;
     }
 
+    /* RMS по принятому буферу PCM (после декодирования). */
+    private void updateRxRms(byte[] pcm, int len) {
+        long sum = 0;
+        int n = len / 2;
+        for (int i = 0; i < n; i++) {
+            short s = (short) ((pcm[i * 2] & 0xFF) | (pcm[i * 2 + 1] << 8));
+            sum += (long) s * s;
+        }
+        if (n == 0) { lastRxRms = 0; return; }
+        double mean = (double) sum / n;
+        double rms = Math.sqrt(mean);
+        int scaled = (int) (rms / 32.0);
+        if (scaled > 1000) scaled = 1000;
+        lastRxRms = scaled;
+    }
+
     public void playG711_16k(int client, byte[] buf, int len) {
         if (!isPlaying || !isValid16(client)) return;
         if (tracks[client] == null) return;
         byte[] pcm = new byte[640];
         g711.decode(buf, 4, 320, pcm);
+        updateRxRms(pcm, 640);
         try {
             tracks[client].write(pcm, 0, 640);
             if (tracks[client].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
@@ -151,6 +171,7 @@ public class AudioEngine {
         if (tracks[slot] == null) return;
         byte[] pcm = new byte[320];
         g711.decode(buf, 4, 160, pcm);
+        updateRxRms(pcm, 320);
         try {
             tracks[slot].write(pcm, 0, 320);
             if (tracks[slot].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
@@ -162,6 +183,7 @@ public class AudioEngine {
     public void playPCM16_16k(int client, byte[] buf, int len) {
         if (!isPlaying || !isValid16(client)) return;
         if (tracks[client] == null) return;
+        updateRxRms(buf, 640);
         try {
             tracks[client].write(buf, 4, 640);
             if (tracks[client].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
@@ -174,6 +196,7 @@ public class AudioEngine {
         if (!isPlaying || !isValid8(client)) return;
         int slot = client + OFFSET_8K;
         if (tracks[slot] == null) return;
+        updateRxRms(buf, 320);
         try {
             tracks[slot].write(buf, 4, 320);
             if (tracks[slot].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
@@ -190,6 +213,7 @@ public class AudioEngine {
             pcm[i - 4] = (short) (buf[i] * 256);
         }
         byte[] out = short2byte(pcm);
+        updateRxRms(out, 640);
         try {
             tracks[client].write(out, 0, 640);
             if (tracks[client].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
@@ -207,6 +231,7 @@ public class AudioEngine {
             pcm[i - 4] = (short) (buf[i] * 256);
         }
         byte[] out = short2byte(pcm);
+        updateRxRms(out, 320);
         try {
             tracks[slot].write(out, 0, 320);
             if (tracks[slot].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {

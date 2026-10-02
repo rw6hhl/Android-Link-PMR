@@ -8,16 +8,20 @@ import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
 
-/* VoxView V1.2.
+/* VoxView V1.5.
  *
- * Изменения V1.2:
- *   - метки My_Vox и vox_pause не прижимаются к краю (минимум 24dp);
- *   - работают с шкалой 0..1000.
+ * Изменения V1.5:
+ *   - оставлена одна метка — My_Vox (красная), метка vox_pause убрана;
+ *   - заливка полосы: жёлтая от 0 до My_Vox, красная от My_Vox до RMS;
+ *   - фон полосы — белый;
+ *   - подпись pause= убрана из полосы;
+ *   - шкала 0..1000.
+ *   - флаг locked — блокирует перемещение метки (для кнопки «ЗАФИКСИРОВАТЬ»).
  */
 public class VoxView extends View {
 
     public interface Listener {
-        void onVoxChanged(int myVox, int voxPause);
+        void onVoxChanged(int myVox);
     }
 
     private static final int MIN_LEVEL = 0;
@@ -26,14 +30,14 @@ public class VoxView extends View {
 
     private int currentRms = 0;
     private int myVox = 400;
-    private int voxPause = 15;
+    private boolean locked = false;
     private Listener listener;
 
     private final Paint paintBarBg     = new Paint();
-    private final Paint paintBarFill   = new Paint();
+    private final Paint paintBarYellow = new Paint();
+    private final Paint paintBarRed    = new Paint();
     private final Paint paintBorder    = new Paint();
     private final Paint paintVoxMark   = new Paint();
-    private final Paint paintPauseMark = new Paint();
     private final Paint paintText      = new Paint();
 
     private float density = 1.0f;
@@ -45,23 +49,22 @@ public class VoxView extends View {
     private void init() {
         density = getResources().getDisplayMetrics().density;
 
-        paintBarBg.setColor(Color.BLACK);
+        paintBarBg.setColor(Color.WHITE);
         paintBarBg.setStyle(Paint.Style.FILL);
 
-        paintBarFill.setColor(Color.WHITE);
-        paintBarFill.setStyle(Paint.Style.FILL);
+        paintBarYellow.setColor(Color.YELLOW);
+        paintBarYellow.setStyle(Paint.Style.FILL);
 
-        paintBorder.setColor(Color.GRAY);
+        paintBarRed.setColor(Color.RED);
+        paintBarRed.setStyle(Paint.Style.FILL);
+
+        paintBorder.setColor(Color.DKGRAY);
         paintBorder.setStrokeWidth(2f);
         paintBorder.setStyle(Paint.Style.STROKE);
 
         paintVoxMark.setColor(Color.RED);
         paintVoxMark.setStrokeWidth(8f);
         paintVoxMark.setStyle(Paint.Style.STROKE);
-
-        paintPauseMark.setColor(Color.GREEN);
-        paintPauseMark.setStrokeWidth(6f);
-        paintPauseMark.setStyle(Paint.Style.STROKE);
 
         paintText.setColor(Color.BLACK);
         paintText.setTextSize(36f);
@@ -77,17 +80,15 @@ public class VoxView extends View {
         if (v < MIN_LEVEL) v = MIN_LEVEL;
         if (v > MAX_LEVEL) v = MAX_LEVEL;
         this.myVox = v;
-        if (voxPause > myVox) voxPause = myVox;
-        invalidate();
-    }
-    public void setVoxPause(int v) {
-        if (v < MIN_LEVEL) v = MIN_LEVEL;
-        if (v > myVox) v = myVox;
-        this.voxPause = v;
         invalidate();
     }
     public int getMyVox() { return myVox; }
-    public int getVoxPause() { return voxPause; }
+
+    public void setLocked(boolean b) {
+        this.locked = b;
+        invalidate();
+    }
+    public boolean isLocked() { return locked; }
 
     @Override
     protected void onDraw(Canvas canvas) {
@@ -102,37 +103,43 @@ public class VoxView extends View {
         int barLeft = padding;
         int barRight = w - padding;
 
+        /* Фон полосы — белый. */
         canvas.drawRect(barLeft, barTop, barRight, barBottom, paintBarBg);
 
-        int fillRight = barLeft + (int) ((barRight - barLeft)
-                * (currentRms - MIN_LEVEL) / (float) (MAX_LEVEL - MIN_LEVEL));
-        if (fillRight < barLeft) fillRight = barLeft;
-        if (fillRight > barRight) fillRight = barRight;
-        canvas.drawRect(barLeft, barTop, fillRight, barBottom, paintBarFill);
-
-        canvas.drawRect(barLeft, barTop, barRight, barBottom, paintBorder);
-
+        /* Позиция метки My_Vox. */
         int voxX = barLeft + edge + (int) ((barRight - barLeft - 2 * edge)
                 * (myVox - MIN_LEVEL) / (float) (MAX_LEVEL - MIN_LEVEL));
-        canvas.drawLine(voxX, barTop - (int)(50 * density),
-                voxX, barBottom + (int)(50 * density), paintVoxMark);
 
-        int pauseX = barLeft + edge + (int) ((barRight - barLeft - 2 * edge)
-                * (voxPause - MIN_LEVEL) / (float) (MAX_LEVEL - MIN_LEVEL));
-        canvas.drawLine(pauseX, barTop - (int)(30 * density),
-                pauseX, barBottom + (int)(30 * density), paintPauseMark);
+        /* Позиция текущего RMS. */
+        int rmsX = barLeft + edge + (int) ((barRight - barLeft - 2 * edge)
+                * (currentRms - MIN_LEVEL) / (float) (MAX_LEVEL - MIN_LEVEL));
+        if (rmsX < barLeft + edge) rmsX = barLeft + edge;
+        if (rmsX > barRight - edge) rmsX = barRight - edge;
 
+        /* Жёлтая заливка — от barLeft до My_Vox. */
+        canvas.drawRect(barLeft, barTop, voxX, barBottom, paintBarYellow);
+
+        /* Красная заливка — от My_Vox до RMS, если RMS > My_Vox. */
+        if (rmsX > voxX) {
+            canvas.drawRect(voxX, barTop, rmsX, barBottom, paintBarRed);
+        }
+
+        /* Окантовка полосы. */
+        canvas.drawRect(barLeft, barTop, barRight, barBottom, paintBorder);
+
+        /* Красная метка My_Vox. */
+        canvas.drawLine(voxX, barTop - (int) (50 * density),
+                voxX, barBottom + (int) (50 * density), paintVoxMark);
+
+        /* Надпись My_Vox над полосой. */
         canvas.drawText("My_Vox=" + myVox, barLeft,
-                barTop - (int)(70 * density), paintText);
-        canvas.drawText("pause=" + voxPause, barLeft,
-                barBottom + (int)(100 * density), paintText);
-        canvas.drawText("RMS=" + currentRms,
-                barRight - (int)(250 * density),
-                barTop - (int)(70 * density), paintText);
+                barTop - (int) (70 * density), paintText);
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent e) {
+        if (locked) return true;
+
         int w = getWidth();
         int padding = (int) (16 * density);
         int edge = (int) (EDGE_MARGIN_DP * density);
@@ -148,14 +155,8 @@ public class VoxView extends View {
 
         if (e.getAction() == MotionEvent.ACTION_DOWN
                 || e.getAction() == MotionEvent.ACTION_MOVE) {
-            int pauseX = barLeft + edge + (int) ((barRight - barLeft - 2 * edge)
-                    * (voxPause - MIN_LEVEL) / (float) (MAX_LEVEL - MIN_LEVEL));
-            if (Math.abs(x - pauseX) < (int)(40 * density)) {
-                setVoxPause(value);
-            } else {
-                setMyVox(value);
-            }
-            if (listener != null) listener.onVoxChanged(myVox, voxPause);
+            setMyVox(value);
+            if (listener != null) listener.onVoxChanged(myVox);
             return true;
         }
         return super.onTouchEvent(e);

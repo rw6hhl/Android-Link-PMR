@@ -16,12 +16,14 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 
-/* Экран настроек Android Link PMR V1.4.
+/* Экран настроек Android Link PMR V1.5.
  *
- * Изменения V1.4:
- *   - USB-индикатор через прямой AudioManager.getDevices();
- *   - без AudioDeviceWatcher.
+ * Изменения V1.5:
+ *   - vox_pause в секундах (EditText);
+ *   - строка VOX=N RX=N + кнопка «ЗАФИКСИРОВАТЬ»;
+ *   - зафиксированная метка My_Vox не двигается.
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -38,9 +40,16 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText regCallsign;
     private EditText regCity;
 
+    private EditText voxPauseInput;
+
     private VoxView voxView;
     private TextView voxStateText;
+    private TextView voxLevelText;
+    private TextView rxLevelText;
     private TextView usbStatusText;
+    private Button btnLockVox;
+
+    private boolean voxLocked = false;
 
     private Handler handler;
     private final Runnable uiLoop = new Runnable() {
@@ -48,7 +57,7 @@ public class SettingsActivity extends AppCompatActivity {
         public void run() {
             refreshVoxUi();
             refreshUsbUi();
-            handler.postDelayed(this, 500);
+            handler.postDelayed(this, 100);
         }
     };
 
@@ -74,7 +83,11 @@ public class SettingsActivity extends AppCompatActivity {
 
         voxView = findViewById(R.id.voxView);
         voxStateText = findViewById(R.id.voxStateText);
+        voxLevelText = findViewById(R.id.voxLevelText);
+        rxLevelText  = findViewById(R.id.rxLevelText);
         usbStatusText = findViewById(R.id.usbStatusText);
+        voxPauseInput = findViewById(R.id.voxPauseInput);
+        btnLockVox = findViewById(R.id.btnLockVox);
 
         Button saveBtn = findViewById(R.id.btnSaveSettings);
         if (saveBtn != null) saveBtn.setOnClickListener(v -> saveSettings());
@@ -84,6 +97,22 @@ public class SettingsActivity extends AppCompatActivity {
             Intent i = new Intent(SettingsActivity.this, LogActivity.class);
             startActivity(i);
         });
+
+        if (btnLockVox != null) {
+            btnLockVox.setOnClickListener(v -> {
+                voxLocked = !voxLocked;
+                voxView.setLocked(voxLocked);
+                if (voxLocked) {
+                    btnLockVox.setBackgroundTintList(
+                            ContextCompat.getColorStateList(
+                                    SettingsActivity.this, R.color.c_red));
+                } else {
+                    btnLockVox.setBackgroundTintList(
+                            ContextCompat.getColorStateList(
+                                    SettingsActivity.this, R.color.c_gray));
+                }
+            });
+        }
 
         loadSettings();
 
@@ -98,21 +127,27 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void refreshVoxUi() {
-        if (voxView == null) return;
+        int voxRms = 0;
+        int rxRms = 0;
+        boolean txActive = false;
         if (PmrService.voxEngine != null) {
-            voxView.setCurrentRms(PmrService.voxEngine.getLastRms());
-            if (voxStateText != null) {
-                voxStateText.setText(PmrService.voxEngine.isTxActive()
-                        ? "СОСТОЯНИЕ: ПЕРЕДАЧА"
-                        : "СОСТОЯНИЕ: ГОТОВ");
-            }
-        } else {
-            voxView.setCurrentRms(0);
-            if (voxStateText != null) voxStateText.setText("СОСТОЯНИЕ: —");
+            voxRms = PmrService.voxEngine.getLastRms();
+            txActive = PmrService.voxEngine.isTxActive();
+        }
+        if (PmrService.audioEngine != null) {
+            rxRms = PmrService.audioEngine.getLastRxRms();
+        }
+
+        if (voxView != null) voxView.setCurrentRms(voxRms);
+        if (voxLevelText != null) voxLevelText.setText("VOX=" + voxRms);
+        if (rxLevelText != null) rxLevelText.setText("RX=" + rxRms);
+        if (voxStateText != null) {
+            voxStateText.setText(txActive
+                    ? "СОСТОЯНИЕ: ПЕРЕДАЧА"
+                    : "СОСТОЯНИЕ: ГОТОВ");
         }
     }
 
-    /* USB-индикатор через прямой AudioManager. */
     private void refreshUsbUi() {
         if (usbStatusText == null) return;
         AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
@@ -179,11 +214,15 @@ public class SettingsActivity extends AppCompatActivity {
         if (voxView != null) {
             int myVox = sp.getInt(PasswordActivity.KEY_MY_VOX,
                     PasswordActivity.DEFAULT_MY_VOX);
-            int voxPause = sp.getInt(PasswordActivity.KEY_VOX_PAUSE,
-                    PasswordActivity.DEFAULT_VOX_PAUSE);
             voxView.setMyVox(myVox);
-            voxView.setVoxPause(voxPause);
         }
+
+        /* vox_pause хранится в тиках, показывается в секундах. */
+        int voxPauseTicks = sp.getInt(PasswordActivity.KEY_VOX_PAUSE,
+                PasswordActivity.DEFAULT_VOX_PAUSE);
+        int voxPauseSec = (int) Math.round(voxPauseTicks / 50.0);
+        if (voxPauseSec < 1) voxPauseSec = 1;
+        if (voxPauseInput != null) voxPauseInput.setText(String.valueOf(voxPauseSec));
     }
 
     private void saveSettings() {
@@ -195,10 +234,17 @@ public class SettingsActivity extends AppCompatActivity {
                 requirePass).apply();
 
         if (voxView != null) {
-            sp.edit()
-                    .putInt(PasswordActivity.KEY_MY_VOX, voxView.getMyVox())
-                    .putInt(PasswordActivity.KEY_VOX_PAUSE, voxView.getVoxPause())
-                    .apply();
+            sp.edit().putInt(PasswordActivity.KEY_MY_VOX, voxView.getMyVox()).apply();
+        }
+
+        /* vox_pause в секундах → тики. */
+        if (voxPauseInput != null) {
+            try {
+                int sec = Integer.parseInt(voxPauseInput.getText().toString().trim());
+                if (sec < 1) sec = 1;
+                if (sec > 20) sec = 20;
+                sp.edit().putInt(PasswordActivity.KEY_VOX_PAUSE, sec * 50).apply();
+            } catch (NumberFormatException ignored) {}
         }
 
         String cur = sp.getString(PasswordActivity.KEY_PASSWORD,
