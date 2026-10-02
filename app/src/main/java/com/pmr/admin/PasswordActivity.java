@@ -10,11 +10,11 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран ввода пароля Android Link PMR V1.7.
+/* Экран ввода пароля Android Link PMR V1.8.
  *
- * Изменения V1.7:
- *   - DEFAULT_PRIZNAK_PMR = "26000";
- *   - добавлены KEY_VOX_MIC, DEFAULT_VOX_MIC = 50 (1.0x).
+ * Изменения V1.8:
+ *   - DEFAULT_VOX_PAUSE = 30;
+ *   - DEFAULT_VOX_MIC = 100.
  */
 public class PasswordActivity extends AppCompatActivity {
 
@@ -51,8 +51,8 @@ public class PasswordActivity extends AppCompatActivity {
     public static final String DEFAULT_CITY          = "Мин-Воды";
 
     public static final int DEFAULT_MY_VOX    = 400;
-    public static final int DEFAULT_VOX_PAUSE = 15;
-    public static final int DEFAULT_VOX_MIC   = 50;
+    public static final int DEFAULT_VOX_PAUSE = 30;
+    public static final int DEFAULT_VOX_MIC   = 100;
 
     private EditText passInput;
 

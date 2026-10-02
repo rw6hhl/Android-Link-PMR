@@ -18,12 +18,10 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
-/* Экран настроек Android Link PMR V1.7.
+/* Экран настроек Android Link PMR V1.8.
  *
- * Изменения V1.7:
- *   - добавлено поле vox_mic (0..100) — усиление микрофона;
- *   - добавлена строка My_Vox=N — текущее значение маркера;
- *   - сохранение/загрузка vox_mic.
+ * Изменения V1.8:
+ *   - кнопка ФИКСИРОВАТЬ сохраняет текущий My_Vox в SharedPreferences.
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -107,9 +105,20 @@ public class SettingsActivity extends AppCompatActivity {
                 voxLocked = !voxLocked;
                 voxView.setLocked(voxLocked);
                 if (voxLocked) {
+                    /* Кнопка становится красной. */
                     btnLockVox.setBackgroundTintList(
                             ContextCompat.getColorStateList(
                                     SettingsActivity.this, R.color.c_red));
+                    /* Немедленно сохраняем текущий My_Vox. */
+                    if (voxView != null) {
+                        SharedPreferences sp = getSharedPreferences(
+                                PasswordActivity.PREFS, MODE_PRIVATE);
+                        sp.edit().putInt(PasswordActivity.KEY_MY_VOX,
+                                voxView.getMyVox()).apply();
+                        Toast.makeText(SettingsActivity.this,
+                                "My_Vox=" + voxView.getMyVox() + " зафиксирован",
+                                Toast.LENGTH_SHORT).show();
+                    }
                 } else {
                     btnLockVox.setBackgroundTintList(
                             ContextCompat.getColorStateList(

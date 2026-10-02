@@ -8,14 +8,11 @@ import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 
-/* VOX-движок Android Link PMR V1.7.
+/* VOX-движок Android Link PMR V1.8.
  *
- * Изменения V1.7:
- *   - добавлено усиление микрофона vox_mic (0..100);
- *   - vox_mic = 0 → усиление отключено (1.0x);
- *   - vox_mic = 100 → MicUsildouble = 2.0x;
- *   - усиление применяется ДО расчёта RMS — чтобы порог срабатывал
- *     на усиленном сигнале.
+ * Изменения V1.8:
+ *   - гистерезис +3: TX включается при rms >= myVox + 3;
+ *   - остальное как в V1.7.
  */
 public class VoxEngine {
 
@@ -24,10 +21,9 @@ public class VoxEngine {
     private static final int BYTES_PER_ELEM = 2;
     private static final int BUF_SIZE = BUF_ELEMENTS * BYTES_PER_ELEM;
 
-    /* Шкала RMS: 100 = тихий, 500 = средний, 800 = громкий. */
     private static final double RMS_DIVISOR = 25.0;
+    private static final int VOX_HYSTERESIS = 3;
 
-    /* Флаги усиления. */
     private static final int onUsilMic = 1;
 
     private final Context appCtx;
@@ -141,9 +137,7 @@ public class VoxEngine {
             int voxMic = sp.getInt(PasswordActivity.KEY_VOX_MIC,
                     PasswordActivity.DEFAULT_VOX_MIC);
 
-            /* Усиление микрофона — до расчёта RMS. */
             byte[] amplified = applyMicGain(pcm16, read, voxMic);
-
             int rms = calcRms(amplified, read);
             lastRms = rms;
 
@@ -163,7 +157,8 @@ public class VoxEngine {
                 continue;
             }
 
-            if (rms >= myVox) {
+            /* Гистерезис +3: включаем при rms >= myVox + 3. */
+            if (rms >= myVox + VOX_HYSTERESIS) {
                 silentTicks = 0;
                 if (!txActive) {
                     txActive = true;
@@ -187,7 +182,6 @@ public class VoxEngine {
         }
     }
 
-    /* Усиление микрофона: 0..100 → 1.0..2.0. vox_mic=0 → 1.0. */
     private byte[] applyMicGain(byte[] pcm, int len, int voxMic) {
         if (onUsilMic == 0 || voxMic <= 0) {
             return pcm;
@@ -234,7 +228,6 @@ public class VoxEngine {
         pmrSocket.sendVoice(main, reserve);
     }
 
-    /* Масштаб 0..1000, делитель 25.0. */
     private static int calcRms(byte[] pcm, int len) {
         long sum = 0;
         int n = len / 2;
