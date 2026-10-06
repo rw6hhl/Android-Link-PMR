@@ -17,9 +17,6 @@ gradle-app.setting
 # Локальные конфиги
 local.properties
 
-# APK — публикуются автоматически через GitHub Actions
-/apk/
-
 # Keystore
 *.jks
 *.keystore
