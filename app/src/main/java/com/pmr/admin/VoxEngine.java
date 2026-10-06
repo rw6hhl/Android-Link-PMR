@@ -8,11 +8,13 @@ import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 
-/* VOX-движок Android Link PMR V1.8.
+/* VOX-движок Android Link PMR V1.9.
  *
- * Изменения V1.8:
- *   - гистерезис +3: TX включается при rms >= myVox + 3;
- *   - остальное как в V1.7.
+ * Изменения V1.9:
+ *   - блокировка VOX при приёме звука от сервера (AudioEngine.isRxActive());
+ *   - блокировка VOX на PoslePrd тиков после TX OFF;
+ *   - усиление микрофона через onUsilMic + MicUsildouble;
+ *   - гистерезис +3 к My_Vox (как в V1.8).
  */
 public class VoxEngine {
 
@@ -24,8 +26,6 @@ public class VoxEngine {
     private static final double RMS_DIVISOR = 25.0;
     private static final int VOX_HYSTERESIS = 3;
 
-    private static final int onUsilMic = 1;
-
     private final Context appCtx;
     private final PmrSocket pmrSocket;
     private final G711Ua g711 = new G711Ua();
@@ -36,6 +36,9 @@ public class VoxEngine {
 
     private volatile boolean txActive = false;
     private volatile int lastRms = 0;
+
+    /* Счётчик блокировки после TX OFF. */
+    private int ticPoslePrd = 0;
 
     public VoxEngine(Context ctx, PmrSocket sock) {
         this.appCtx = ctx;
@@ -136,16 +139,58 @@ public class VoxEngine {
                     PasswordActivity.DEFAULT_VOX_PAUSE);
             int voxMic = sp.getInt(PasswordActivity.KEY_VOX_MIC,
                     PasswordActivity.DEFAULT_VOX_MIC);
+            int poslePrd = sp.getInt(PasswordActivity.KEY_POSLE_PRD,
+                    PasswordActivity.DEFAULT_POSLE_PRD);
+            int onUsilMic = sp.getInt(PasswordActivity.KEY_USIL_MIC,
+                    PasswordActivity.DEFAULT_USIL_MIC);
 
-            byte[] amplified = applyMicGain(pcm16, read, voxMic);
+            double micUsil = 1.0;
+            if (onUsilMic != 0) {
+                String micStr = sp.getString(PasswordActivity.KEY_MIC_USIL,
+                        String.valueOf(PasswordActivity.DEFAULT_MIC_USIL));
+                try {
+                    micUsil = Double.parseDouble(micStr);
+                } catch (NumberFormatException ignored) {
+                    micUsil = PasswordActivity.DEFAULT_MIC_USIL;
+                }
+            }
+
+            byte[] amplified = applyMicGain(pcm16, read, micUsil);
             int rms = calcRms(amplified, read);
             lastRms = rms;
 
             diagCounter++;
             if (diagCounter >= 50) {
                 AppLog.add("VoxEngine: rms=" + rms + ", vox=" + myVox
-                        + ", mic=" + voxMic + ", tx=" + txActive);
+                        + ", mic=" + voxMic + ", usil=" + micUsil
+                        + ", tx=" + txActive
+                        + ", prd=" + ticPoslePrd
+                        + ", rx=" + (PmrService.audioEngine != null
+                                && PmrService.audioEngine.isRxActive()));
                 diagCounter = 0;
+            }
+
+            /* Блокировка VOX при приёме звука от сервера. */
+            if (PmrService.audioEngine != null
+                    && PmrService.audioEngine.isRxActive()) {
+                if (txActive) {
+                    txActive = false;
+                    AppLog.add("VoxEngine: TX OFF (RX active)");
+                }
+                silentTicks = 0;
+                ticPoslePrd = poslePrd;
+                continue;
+            }
+
+            /* Блокировка после TX OFF на PoslePrd тиков. */
+            if (ticPoslePrd > 0) {
+                ticPoslePrd--;
+                if (txActive) {
+                    txActive = false;
+                    AppLog.add("VoxEngine: TX OFF (prd)");
+                }
+                silentTicks = 0;
+                continue;
             }
 
             if (myVox <= 0) {
@@ -157,7 +202,6 @@ public class VoxEngine {
                 continue;
             }
 
-            /* Гистерезис +3: включаем при rms >= myVox + 3. */
             if (rms >= myVox + VOX_HYSTERESIS) {
                 silentTicks = 0;
                 if (!txActive) {
@@ -171,8 +215,10 @@ public class VoxEngine {
                     silentTicks++;
                     if (silentTicks >= voxPause) {
                         txActive = false;
+                        ticPoslePrd = poslePrd;
                         AppLog.add("VoxEngine: TX OFF (silent="
-                                + silentTicks + ", pause=" + voxPause + ")");
+                                + silentTicks + ", pause=" + voxPause
+                                + ", prd=" + ticPoslePrd + ")");
                         silentTicks = 0;
                     } else {
                         sendFrame(amplified, read, g711buf);
@@ -182,12 +228,9 @@ public class VoxEngine {
         }
     }
 
-    private byte[] applyMicGain(byte[] pcm, int len, int voxMic) {
-        if (onUsilMic == 0 || voxMic <= 0) {
-            return pcm;
-        }
-        double micUsil = (double) voxMic / 50.0;
-        if (micUsil <= 1.0) {
+    /* Усиление микрофона: коэффициент напрямую. */
+    private byte[] applyMicGain(byte[] pcm, int len, double micUsil) {
+        if (micUsil <= 1.0 || micUsil <= 0.0) {
             return pcm;
         }
         byte[] out = new byte[len];
@@ -209,15 +252,7 @@ public class VoxEngine {
         int payloadLen = read / 2;
         int secret = pmrSocket.getKanalSecretInstance();
 
-        byte[] reserve = new byte[6 + payloadLen];
-        reserve[0] = (byte) AudioEngine.CMD_G711_16K;
-        reserve[1] = 0;
-        reserve[2] = (byte) (PmrSocket.Priznak_pmr & 0xFF);
-        reserve[3] = (byte) ((PmrSocket.Priznak_pmr >> 8) & 0xFF);
-        reserve[4] = (byte) (secret & 0xFF);
-        reserve[5] = (byte) ((secret >> 8) & 0xFF);
-        System.arraycopy(g711buf, 0, reserve, 6, payloadLen);
-
+        /* Основной пакет 324 байта. Резервный больше не используется. */
         byte[] main = new byte[4 + payloadLen];
         main[0] = (byte) AudioEngine.CMD_G711_16K;
         main[1] = 0;
@@ -225,7 +260,7 @@ public class VoxEngine {
         main[3] = (byte) ((PmrSocket.Priznak_pmr >> 8) & 0xFF);
         System.arraycopy(g711buf, 0, main, 4, payloadLen);
 
-        pmrSocket.sendVoice(main, reserve);
+        pmrSocket.sendVoice(main, null);
     }
 
     private static int calcRms(byte[] pcm, int len) {

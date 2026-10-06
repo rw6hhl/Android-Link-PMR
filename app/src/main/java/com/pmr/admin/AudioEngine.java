@@ -6,10 +6,13 @@ import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
 
-/* Звуковой движок Android Link PMR V1.7.
+/* Звуковой движок Android Link PMR V1.9.
  *
- * Изменения V1.7:
- *   - lastRxRms умножается на DinUsildouble (0.4).
+ * Изменения V1.9:
+ *   - добавлено поле lastRxTime и метод markRxActivity();
+ *   - добавлен метод isRxActive() — true, если приём был < 500 мс назад;
+ *   - DinUsildouble применяется к lastRxRms при onUsilDin = 1;
+ *   - лог getMinBufferSize() при startPlaying().
  */
 public class AudioEngine {
 
@@ -26,12 +29,10 @@ public class AudioEngine {
     private static final int OFFSET_8K = 20;
 
     private static final float VOLUME_BOOST = 1.7f;
-
     private static final double RMS_DIVISOR = 25.0;
 
-    /* Флаги усиления приёма. */
-    private static final int onUsilDin = 1;
-    private static final double DinUsildouble = 0.4;
+    /* Таймаут приёма: если новых пакетов нет дольше — считаем, что приём завершён. */
+    private static final long RX_TIMEOUT_MS = 500L;
 
     private final Context appCtx;
     private final PmrSocket pmrSocket;
@@ -41,6 +42,9 @@ public class AudioEngine {
     private volatile boolean isPlaying = false;
     private volatile int lastRxRms = 0;
 
+    /* Время последнего принятого пакета — для isRxActive(). */
+    private volatile long lastRxTime = 0L;
+
     public AudioEngine(Context ctx, PmrSocket sock) {
         this.appCtx = ctx;
         this.pmrSocket = sock;
@@ -49,12 +53,34 @@ public class AudioEngine {
     public boolean isPlaying() { return isPlaying; }
     public int getLastRxRms()  { return lastRxRms; }
 
+    /* Новый метод: пометить, что только что пришёл звук от сервера. */
+    public void markRxActivity() {
+        lastRxTime = System.currentTimeMillis();
+    }
+
+    /* Новый метод: идёт ли приём прямо сейчас. */
+    public boolean isRxActive() {
+        long t = lastRxTime;
+        if (t == 0L) return false;
+        return (System.currentTimeMillis() - t) < RX_TIMEOUT_MS;
+    }
+
     public void startPlaying() {
         if (isPlaying) return;
 
         logCurrentAudioDevice("AudioEngine");
         AppLog.add("AudioEngine: использование " +
                 (isUsbPresent() ? "USB-аудио" : "встроенного динамика"));
+
+        int minSize16 = AudioTrack.getMinBufferSize(SAMPLE_RATE_16K,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT);
+        int minSize8 = AudioTrack.getMinBufferSize(SAMPLE_RATE_8K,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT);
+        AppLog.add("AudioEngine: minBufferSize16=" + minSize16
+                + " (" + (minSize16 / 32) + " мс), minBufferSize8="
+                + minSize8 + " (" + (minSize8 / 16) + " мс)");
 
         for (int i = 0; i < SLOTS_PER_FORMAT; i++) {
             if (tracks[i] == null) {
@@ -63,9 +89,7 @@ public class AudioEngine {
                         SAMPLE_RATE_16K,
                         AudioFormat.CHANNEL_OUT_MONO,
                         AudioFormat.ENCODING_PCM_16BIT,
-                        AudioTrack.getMinBufferSize(SAMPLE_RATE_16K,
-                                AudioFormat.CHANNEL_OUT_MONO,
-                                AudioFormat.ENCODING_PCM_16BIT),
+                        minSize16,
                         AudioTrack.MODE_STREAM);
                 try { tracks[i].setVolume(VOLUME_BOOST); } catch (Exception ignored) {}
             }
@@ -77,9 +101,7 @@ public class AudioEngine {
                         SAMPLE_RATE_8K,
                         AudioFormat.CHANNEL_OUT_MONO,
                         AudioFormat.ENCODING_PCM_16BIT,
-                        AudioTrack.getMinBufferSize(SAMPLE_RATE_8K,
-                                AudioFormat.CHANNEL_OUT_MONO,
-                                AudioFormat.ENCODING_PCM_16BIT),
+                        minSize8,
                         AudioTrack.MODE_STREAM);
                 try { tracks[i].setVolume(VOLUME_BOOST); } catch (Exception ignored) {}
             }
@@ -138,7 +160,7 @@ public class AudioEngine {
         return client >= 0 && client < SLOTS_PER_FORMAT;
     }
 
-    /* RX-уровень: RMS * DinUsildouble (0.4), делитель 25.0. */
+    /* RX-уровень: RMS × DinUsildouble (если включено), делитель 25.0. */
     private void updateRxRms(byte[] pcm, int len) {
         long sum = 0;
         int n = len / 2;
@@ -149,9 +171,28 @@ public class AudioEngine {
         if (n == 0) { lastRxRms = 0; return; }
         double mean = (double) sum / n;
         double rms = Math.sqrt(mean);
-        double usil = (onUsilDin != 0) ? DinUsildouble : 1.0;
+
+        /* Читаем флаг onUsilDin и коэффициент DinUsildouble из SharedPreferences. */
+        double usil = 1.0;
+        try {
+            android.content.SharedPreferences sp = appCtx.getSharedPreferences(
+                    PasswordActivity.PREFS, Context.MODE_PRIVATE);
+            int onUsilDin = sp.getInt(PasswordActivity.KEY_USIL_DIN,
+                    PasswordActivity.DEFAULT_USIL_DIN);
+            if (onUsilDin != 0) {
+                String dinStr = sp.getString(PasswordActivity.KEY_DIN_USIL,
+                        String.valueOf(PasswordActivity.DEFAULT_DIN_USIL));
+                try {
+                    usil = Double.parseDouble(dinStr);
+                } catch (NumberFormatException ignored) {
+                    usil = PasswordActivity.DEFAULT_DIN_USIL;
+                }
+            }
+        } catch (Exception ignored) {}
+
         int scaled = (int) ((rms * usil) / RMS_DIVISOR);
         if (scaled > 1000) scaled = 1000;
+        if (scaled < 0)    scaled = 0;
         lastRxRms = scaled;
     }
 
