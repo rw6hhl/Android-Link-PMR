@@ -26,4 +26,26 @@
         android:textColor="@color/c_white"
         android:textSize="24sp" />
 
+    <TextView
+        android:id="@+id/splashCall"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:layout_marginTop="32dp"
+        android:text="Call: —"
+        android:textColor="@color/c_white"
+        android:textSize="22sp" />
+
+    <TextView
+        android:id="@+id/splashQth"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:layout_marginTop="8dp"
+        android:text="QTH: —"
+        android:textColor="@color/c_white"
+        android:textSize="22sp" />
+
 </LinearLayout>

@@ -18,10 +18,15 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
-/* Экран настроек Android Link PMR V1.8.
+/* Экран настроек Android Link PMR V1.9.
  *
- * Изменения V1.8:
- *   - кнопка ФИКСИРОВАТЬ сохраняет текущий My_Vox в SharedPreferences.
+ * Изменения V1.9:
+ *   - три состояния: ГОТОВ / ПЕРЕДАЧА / ПРИЕМ;
+ *   - убран второй IP-сервер (regIpServer2);
+ *   - добавлены поля port_prm, port_prd;
+ *   - добавлены поля усилений: onUsilMic, MicUsildouble, onUsilDin, DinUsildouble;
+ *   - добавлено поле PoslePrd;
+ *   - убран вызов KEY_IP_SERVER2 (иначе не компилируется после V1.9 part1).
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -34,12 +39,19 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText regPChannel;
     private EditText regPriznak;
     private EditText regIpServer;
-    private EditText regIpServer2;
+    private EditText regPortPrm;
+    private EditText regPortPrd;
     private EditText regCallsign;
     private EditText regCity;
 
+    private EditText etOnUsilMic;
+    private EditText etMicUsil;
+    private EditText etOnUsilDin;
+    private EditText etDinUsil;
+
     private EditText voxPauseInput;
     private EditText voxMicInput;
+    private EditText poslePrdInput;
 
     private VoxView voxView;
     private TextView voxStateText;
@@ -77,9 +89,15 @@ public class SettingsActivity extends AppCompatActivity {
         regPChannel  = findViewById(R.id.regPChannel);
         regPriznak   = findViewById(R.id.regPriznak);
         regIpServer  = findViewById(R.id.regIpServer);
-        regIpServer2 = findViewById(R.id.regIpServer2);
+        regPortPrm   = findViewById(R.id.regPortPrm);
+        regPortPrd   = findViewById(R.id.regPortPrd);
         regCallsign  = findViewById(R.id.regCallsign);
         regCity      = findViewById(R.id.regCity);
+
+        etOnUsilMic = findViewById(R.id.etOnUsilMic);
+        etMicUsil   = findViewById(R.id.etMicUsil);
+        etOnUsilDin = findViewById(R.id.etOnUsilDin);
+        etDinUsil   = findViewById(R.id.etDinUsil);
 
         voxView = findViewById(R.id.voxView);
         voxStateText = findViewById(R.id.voxStateText);
@@ -89,6 +107,7 @@ public class SettingsActivity extends AppCompatActivity {
         usbStatusText = findViewById(R.id.usbStatusText);
         voxPauseInput = findViewById(R.id.voxPauseInput);
         voxMicInput   = findViewById(R.id.voxMicInput);
+        poslePrdInput = findViewById(R.id.poslePrdInput);
         btnLockVox = findViewById(R.id.btnLockVox);
 
         Button saveBtn = findViewById(R.id.btnSaveSettings);
@@ -105,11 +124,9 @@ public class SettingsActivity extends AppCompatActivity {
                 voxLocked = !voxLocked;
                 voxView.setLocked(voxLocked);
                 if (voxLocked) {
-                    /* Кнопка становится красной. */
                     btnLockVox.setBackgroundTintList(
                             ContextCompat.getColorStateList(
                                     SettingsActivity.this, R.color.c_red));
-                    /* Немедленно сохраняем текущий My_Vox. */
                     if (voxView != null) {
                         SharedPreferences sp = getSharedPreferences(
                                 PasswordActivity.PREFS, MODE_PRIVATE);
@@ -143,12 +160,14 @@ public class SettingsActivity extends AppCompatActivity {
         int voxRms = 0;
         int rxRms = 0;
         boolean txActive = false;
+        boolean rxActive = false;
         if (PmrService.voxEngine != null) {
             voxRms = PmrService.voxEngine.getLastRms();
             txActive = PmrService.voxEngine.isTxActive();
         }
         if (PmrService.audioEngine != null) {
             rxRms = PmrService.audioEngine.getLastRxRms();
+            rxActive = PmrService.audioEngine.isRxActive();
         }
 
         if (voxView != null) voxView.setCurrentRms(voxRms);
@@ -156,10 +175,17 @@ public class SettingsActivity extends AppCompatActivity {
         if (rxLevelText != null) rxLevelText.setText("RX=" + rxRms);
         if (myVoxText != null && voxView != null)
             myVoxText.setText("My_Vox=" + voxView.getMyVox());
+
         if (voxStateText != null) {
-            voxStateText.setText(txActive
-                    ? "СОСТОЯНИЕ: ПЕРЕДАЧА"
-                    : "СОСТОЯНИЕ: ГОТОВ");
+            String state;
+            if (rxActive) {
+                state = "СОСТОЯНИЕ: ПРИЕМ";
+            } else if (txActive) {
+                state = "СОСТОЯНИЕ: ПЕРЕДАЧА";
+            } else {
+                state = "СОСТОЯНИЕ: ГОТОВ";
+            }
+            voxStateText.setText(state);
         }
     }
 
@@ -213,10 +239,14 @@ public class SettingsActivity extends AppCompatActivity {
             regIpServer.setText(sp.getString(
                     PasswordActivity.KEY_IP_SERVER,
                     PasswordActivity.DEFAULT_IP_SERVER));
-        if (regIpServer2 != null)
-            regIpServer2.setText(sp.getString(
-                    PasswordActivity.KEY_IP_SERVER2,
-                    PasswordActivity.DEFAULT_IP_SERVER2));
+        if (regPortPrm != null)
+            regPortPrm.setText(String.valueOf(sp.getInt(
+                    PasswordActivity.KEY_PORT_PRM,
+                    PasswordActivity.DEFAULT_PORT_PRM)));
+        if (regPortPrd != null)
+            regPortPrd.setText(String.valueOf(sp.getInt(
+                    PasswordActivity.KEY_PORT_PRD,
+                    PasswordActivity.DEFAULT_PORT_PRD)));
         if (regCallsign != null)
             regCallsign.setText(sp.getString(
                     PasswordActivity.KEY_CALLSIGN,
@@ -225,6 +255,31 @@ public class SettingsActivity extends AppCompatActivity {
             regCity.setText(sp.getString(
                     PasswordActivity.KEY_CITY,
                     PasswordActivity.DEFAULT_CITY));
+
+        if (etOnUsilMic != null)
+            etOnUsilMic.setText(String.valueOf(sp.getInt(
+                    PasswordActivity.KEY_USIL_MIC,
+                    PasswordActivity.DEFAULT_USIL_MIC)));
+        if (etMicUsil != null) {
+            double micUsil = PasswordActivity.DEFAULT_MIC_USIL;
+            String s = sp.getString(PasswordActivity.KEY_MIC_USIL, null);
+            if (s != null) {
+                try { micUsil = Double.parseDouble(s); } catch (Exception ignored) {}
+            }
+            etMicUsil.setText(String.valueOf(micUsil));
+        }
+        if (etOnUsilDin != null)
+            etOnUsilDin.setText(String.valueOf(sp.getInt(
+                    PasswordActivity.KEY_USIL_DIN,
+                    PasswordActivity.DEFAULT_USIL_DIN)));
+        if (etDinUsil != null) {
+            double dinUsil = PasswordActivity.DEFAULT_DIN_USIL;
+            String s = sp.getString(PasswordActivity.KEY_DIN_USIL, null);
+            if (s != null) {
+                try { dinUsil = Double.parseDouble(s); } catch (Exception ignored) {}
+            }
+            etDinUsil.setText(String.valueOf(dinUsil));
+        }
 
         if (voxView != null) {
             int myVox = sp.getInt(PasswordActivity.KEY_MY_VOX,
@@ -241,6 +296,11 @@ public class SettingsActivity extends AppCompatActivity {
                 PasswordActivity.DEFAULT_VOX_MIC);
         if (voxMicInput != null)
             voxMicInput.setText(String.valueOf(voxMic));
+
+        int poslePrd = sp.getInt(PasswordActivity.KEY_POSLE_PRD,
+                PasswordActivity.DEFAULT_POSLE_PRD);
+        if (poslePrdInput != null)
+            poslePrdInput.setText(String.valueOf(poslePrd));
     }
 
     private void saveSettings() {
@@ -270,6 +330,44 @@ public class SettingsActivity extends AppCompatActivity {
                 if (v < 0) v = 0;
                 if (v > 100) v = 100;
                 sp.edit().putInt(PasswordActivity.KEY_VOX_MIC, v).apply();
+            } catch (NumberFormatException ignored) {}
+        }
+
+        if (poslePrdInput != null) {
+            try {
+                int v = Integer.parseInt(poslePrdInput.getText().toString().trim());
+                if (v < 0) v = 0;
+                if (v > 1000) v = 1000;
+                sp.edit().putInt(PasswordActivity.KEY_POSLE_PRD, v).apply();
+            } catch (NumberFormatException ignored) {}
+        }
+
+        if (etOnUsilMic != null) {
+            try {
+                int v = Integer.parseInt(etOnUsilMic.getText().toString().trim());
+                if (v != 0 && v != 1) v = 0;
+                sp.edit().putInt(PasswordActivity.KEY_USIL_MIC, v).apply();
+            } catch (NumberFormatException ignored) {}
+        }
+        if (etMicUsil != null) {
+            try {
+                double v = Double.parseDouble(etMicUsil.getText().toString().trim());
+                sp.edit().putString(PasswordActivity.KEY_MIC_USIL,
+                        String.valueOf(v)).apply();
+            } catch (NumberFormatException ignored) {}
+        }
+        if (etOnUsilDin != null) {
+            try {
+                int v = Integer.parseInt(etOnUsilDin.getText().toString().trim());
+                if (v != 0 && v != 1) v = 0;
+                sp.edit().putInt(PasswordActivity.KEY_USIL_DIN, v).apply();
+            } catch (NumberFormatException ignored) {}
+        }
+        if (etDinUsil != null) {
+            try {
+                double v = Double.parseDouble(etDinUsil.getText().toString().trim());
+                sp.edit().putString(PasswordActivity.KEY_DIN_USIL,
+                        String.valueOf(v)).apply();
             } catch (NumberFormatException ignored) {}
         }
 
@@ -309,8 +407,6 @@ public class SettingsActivity extends AppCompatActivity {
                 ? regPriznak.getText().toString().trim() : "";
         String ipServer = (regIpServer != null)
                 ? regIpServer.getText().toString().trim() : "";
-        String ipServer2 = (regIpServer2 != null)
-                ? regIpServer2.getText().toString().trim() : "";
         String callsign = (regCallsign != null)
                 ? regCallsign.getText().toString().trim() : "";
         String city = (regCity != null)
@@ -324,12 +420,25 @@ public class SettingsActivity extends AppCompatActivity {
                 PasswordActivity.KEY_PRIZNAK_PMR, priznak).apply();
         if (!ipServer.isEmpty()) sp.edit().putString(
                 PasswordActivity.KEY_IP_SERVER, ipServer).apply();
-        if (!ipServer2.isEmpty()) sp.edit().putString(
-                PasswordActivity.KEY_IP_SERVER2, ipServer2).apply();
         if (!callsign.isEmpty()) sp.edit().putString(
                 PasswordActivity.KEY_CALLSIGN, callsign).apply();
         if (!city.isEmpty()) sp.edit().putString(
                 PasswordActivity.KEY_CITY, city).apply();
+
+        if (regPortPrm != null) {
+            try {
+                int v = Integer.parseInt(regPortPrm.getText().toString().trim());
+                if (v > 0 && v < 65536)
+                    sp.edit().putInt(PasswordActivity.KEY_PORT_PRM, v).apply();
+            } catch (NumberFormatException ignored) {}
+        }
+        if (regPortPrd != null) {
+            try {
+                int v = Integer.parseInt(regPortPrd.getText().toString().trim());
+                if (v > 0 && v < 65536)
+                    sp.edit().putInt(PasswordActivity.KEY_PORT_PRD, v).apply();
+            } catch (NumberFormatException ignored) {}
+        }
 
         if (PmrService.pmrSocket != null) {
             PmrService.pmrSocket.reloadFromPrefs(this);

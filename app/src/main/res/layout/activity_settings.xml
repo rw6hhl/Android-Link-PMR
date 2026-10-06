@@ -18,6 +18,8 @@
             android:textStyle="bold"
             android:textColor="@color/c_blue" />
 
+        <!-- ======================= VOX ======================= -->
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -133,6 +135,32 @@
                 android:textSize="16sp" />
         </LinearLayout>
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="4dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="180dp"
+                android:text="PoslePrd (тики)  ="
+                android:textSize="16sp"
+                android:textColor="@color/c_black" />
+
+            <EditText
+                android:id="@+id/poslePrdInput"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="number"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <!-- ==================== USB-аудио ==================== -->
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -150,6 +178,8 @@
             android:textSize="16sp"
             android:textColor="@color/c_black" />
 
+        <!-- ==================== Регистрационные ==================== -->
+
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -164,7 +194,7 @@
             android:layout_marginTop="8dp">
             <TextView android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:minWidth="140dp"
+                android:minWidth="160dp"
                 android:text="Priznak_pmr  ="
                 android:textSize="16sp"
                 android:textColor="@color/c_black" />
@@ -182,7 +212,7 @@
             android:layout_marginTop="4dp">
             <TextView android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:minWidth="140dp"
+                android:minWidth="160dp"
                 android:text="MyMailIndex  ="
                 android:textSize="16sp"
                 android:textColor="@color/c_black" />
@@ -200,7 +230,7 @@
             android:layout_marginTop="4dp">
             <TextView android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:minWidth="140dp"
+                android:minWidth="160dp"
                 android:text="MyPChannel   ="
                 android:textSize="16sp"
                 android:textColor="@color/c_black" />
@@ -218,7 +248,7 @@
             android:layout_marginTop="4dp">
             <TextView android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:minWidth="140dp"
+                android:minWidth="160dp"
                 android:text="ip_server  ="
                 android:textSize="16sp"
                 android:textColor="@color/c_black" />
@@ -236,15 +266,15 @@
             android:layout_marginTop="4dp">
             <TextView android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:minWidth="140dp"
-                android:text="ip_server2 ="
+                android:minWidth="160dp"
+                android:text="port_prm  ="
                 android:textSize="16sp"
                 android:textColor="@color/c_black" />
-            <EditText android:id="@+id/regIpServer2"
+            <EditText android:id="@+id/regPortPrm"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:inputType="text"
+                android:inputType="number"
                 android:textSize="16sp" />
         </LinearLayout>
 
@@ -254,7 +284,97 @@
             android:layout_marginTop="4dp">
             <TextView android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:minWidth="140dp"
+                android:minWidth="160dp"
+                android:text="port_prd  ="
+                android:textSize="16sp"
+                android:textColor="@color/c_black" />
+            <EditText android:id="@+id/regPortPrd"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="number"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="4dp">
+            <TextView android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="160dp"
+                android:text="onUsilMic  ="
+                android:textSize="16sp"
+                android:textColor="@color/c_black" />
+            <EditText android:id="@+id/etOnUsilMic"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="number"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="4dp">
+            <TextView android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="160dp"
+                android:text="MicUsildouble  ="
+                android:textSize="16sp"
+                android:textColor="@color/c_black" />
+            <EditText android:id="@+id/etMicUsil"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="numberDecimal"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="4dp">
+            <TextView android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="160dp"
+                android:text="onUsilDin  ="
+                android:textSize="16sp"
+                android:textColor="@color/c_black" />
+            <EditText android:id="@+id/etOnUsilDin"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="number"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="4dp">
+            <TextView android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="160dp"
+                android:text="DinUsildouble  ="
+                android:textSize="16sp"
+                android:textColor="@color/c_black" />
+            <EditText android:id="@+id/etDinUsil"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="numberDecimal"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="4dp">
+            <TextView android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="160dp"
                 android:text="Call  ="
                 android:textSize="16sp"
                 android:textColor="@color/c_black" />
@@ -272,7 +392,7 @@
             android:layout_marginTop="4dp">
             <TextView android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:minWidth="140dp"
+                android:minWidth="160dp"
                 android:text="QTH  ="
                 android:textSize="16sp"
                 android:textColor="@color/c_black" />
@@ -283,6 +403,8 @@
                 android:inputType="text"
                 android:textSize="16sp" />
         </LinearLayout>
+
+        <!-- =================== Смена пароля =================== -->
 
         <TextView
             android:layout_width="match_parent"

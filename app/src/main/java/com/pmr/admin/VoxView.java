@@ -8,11 +8,12 @@ import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
 
-/* VoxView V1.7.
+/* VoxView V1.9.
  *
- * Изменения V1.7:
- *   - заливка полосы: жёлтая до My_Vox, красная после, если RMS > My_Vox;
- *   - фон белый;
+ * Изменения V1.9:
+ *   - убрана жёлтая заливка (она закрывала красную);
+ *   - оставлена только красная полоса от My_Vox до текущего RMS;
+ *   - фон полосы — белый;
  *   - одна метка My_Vox (красная), шкала 0..1000.
  */
 public class VoxView extends View {
@@ -31,7 +32,6 @@ public class VoxView extends View {
     private Listener listener;
 
     private final Paint paintBarBg     = new Paint();
-    private final Paint paintBarYellow = new Paint();
     private final Paint paintBarRed    = new Paint();
     private final Paint paintBorder    = new Paint();
     private final Paint paintVoxMark   = new Paint();
@@ -48,9 +48,6 @@ public class VoxView extends View {
 
         paintBarBg.setColor(Color.WHITE);
         paintBarBg.setStyle(Paint.Style.FILL);
-
-        paintBarYellow.setColor(Color.YELLOW);
-        paintBarYellow.setStyle(Paint.Style.FILL);
 
         paintBarRed.setColor(Color.RED);
         paintBarRed.setStyle(Paint.Style.FILL);
@@ -99,26 +96,32 @@ public class VoxView extends View {
         int barLeft = padding;
         int barRight = w - padding;
 
+        /* Фон полосы — белый. */
         canvas.drawRect(barLeft, barTop, barRight, barBottom, paintBarBg);
 
+        /* Позиция метки My_Vox. */
         int voxX = barLeft + edge + (int) ((barRight - barLeft - 2 * edge)
                 * (myVox - MIN_LEVEL) / (float) (MAX_LEVEL - MIN_LEVEL));
 
+        /* Позиция текущего RMS. */
         int rmsX = barLeft + edge + (int) ((barRight - barLeft - 2 * edge)
                 * (currentRms - MIN_LEVEL) / (float) (MAX_LEVEL - MIN_LEVEL));
         if (rmsX < barLeft + edge) rmsX = barLeft + edge;
         if (rmsX > barRight - edge) rmsX = barRight - edge;
 
-        canvas.drawRect(barLeft, barTop, voxX, barBottom, paintBarYellow);
+        /* Красная заливка — только от My_Vox до RMS, если RMS > My_Vox. */
         if (rmsX > voxX) {
             canvas.drawRect(voxX, barTop, rmsX, barBottom, paintBarRed);
         }
 
+        /* Окантовка полосы. */
         canvas.drawRect(barLeft, barTop, barRight, barBottom, paintBorder);
 
+        /* Красная метка My_Vox. */
         canvas.drawLine(voxX, barTop - (int) (50 * density),
                 voxX, barBottom + (int) (50 * density), paintVoxMark);
 
+        /* Надпись My_Vox над полосой. */
         canvas.drawText("My_Vox=" + myVox, barLeft,
                 barTop - (int) (70 * density), paintText);
     }
