@@ -1,9 +1,12 @@
-﻿name: Build adminPMR APK
+name: Build Android Link PMR APK
 
 on:
   push:
     branches: [ main, master ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -39,3 +42,22 @@ jobs:
           name: app-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      - name: Publish APK to apk/ folder
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          set -e
+          mkdir -p apk
+          # Имя APK формируется из versionName в build.gradle: app-vX_Y.apk
+          APK_SRC=$(ls app/build/outputs/apk/debug/*.apk | head -n 1)
+          APK_NAME=$(basename "$APK_SRC")
+          cp "$APK_SRC" "apk/$APK_NAME"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "apk/$APK_NAME"
+          if git diff --cached --quiet; then
+            echo "APK не изменился, пропускаем commit"
+            exit 0
+          fi
+          git commit -m "Publish $APK_NAME [skip ci]"
+          git push origin main

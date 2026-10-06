@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Android Link PMR</string>
-    <string name="app_version">V1.8</string>
+    <string name="app_version">V1.9</string>
 
     <string name="password_hint">Пароль</string>
     <string name="password_btn">ВОЙТИ</string>
@@ -21,6 +21,7 @@
     <string name="settings_error_mismatch">Подтверждение не совпадает</string>
     <string name="settings_password_title">Требовать пароль при запуске</string>
     <string name="settings_log_open">ОТКРЫТЬ ЛОГИ</string>
+    <string name="btn_update_check">ПРОВЕРИТЬ ОБНОВЛЕНИЕ</string>
 
     <string name="log_title">ЛОГИ ПРИЛОЖЕНИЯ</string>
     <string name="log_clear">ОЧИСТИТЬ</string>

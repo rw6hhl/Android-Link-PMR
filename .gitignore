@@ -1,0 +1,25 @@
+# Сборочные артефакты
+/build/
+/app/build/
+
+# Иде (Android Studio)
+/.idea/
+*.iml
+*.iws
+*.ipr
+.DS_Store
+
+# Gradle
+.gradle/
+gradle-app.setting
+!gradle/wrapper/gradle-wrapper.jar
+
+# Локальные конфиги
+local.properties
+
+# APK — публикуются автоматически через GitHub Actions
+/apk/
+
+# Keystore
+*.jks
+*.keystore
