@@ -6,13 +6,11 @@ import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
 
-/* Звуковой движок Android Link PMR V1.9.
+/* Звуковой движок Android Link PMR V2.5.
  *
- * Изменения V1.9:
- *   - добавлено поле lastRxTime и метод markRxActivity();
- *   - добавлен метод isRxActive() — true, если приём был < 500 мс назад;
- *   - DinUsildouble применяется к lastRxRms при onUsilDin = 1;
- *   - лог getMinBufferSize() при startPlaying().
+ * Изменения V2.5:
+ *   - при смене состояния RX (есть/нет приём) — управление PTT CM108;
+ *   - включение PTT при первом пакете, выключение через RX_TIMEOUT_MS.
  */
 public class AudioEngine {
 
@@ -30,8 +28,6 @@ public class AudioEngine {
 
     private static final float VOLUME_BOOST = 1.7f;
     private static final double RMS_DIVISOR = 25.0;
-
-    /* Таймаут приёма: если новых пакетов нет дольше — считаем, что приём завершён. */
     private static final long RX_TIMEOUT_MS = 500L;
 
     private final Context appCtx;
@@ -41,28 +37,46 @@ public class AudioEngine {
     private AudioTrack[] tracks = new AudioTrack[40];
     private volatile boolean isPlaying = false;
     private volatile int lastRxRms = 0;
-
-    /* Время последнего принятого пакета — для isRxActive(). */
     private volatile long lastRxTime = 0L;
+
+    /* PTT-контроллер CM108. */
+    private Cm108PttController pttController = null;
 
     public AudioEngine(Context ctx, PmrSocket sock) {
         this.appCtx = ctx;
         this.pmrSocket = sock;
     }
 
-    public boolean isPlaying() { return isPlaying; }
-    public int getLastRxRms()  { return lastRxRms; }
-
-    /* Новый метод: пометить, что только что пришёл звук от сервера. */
-    public void markRxActivity() {
-        lastRxTime = System.currentTimeMillis();
+    public void setPttController(Cm108PttController c) {
+        this.pttController = c;
     }
 
-    /* Новый метод: идёт ли приём прямо сейчас. */
+    public boolean isPlaying() { return isPlaying; }
+    public int getLastRxRms()  { return lastRxRms; }
     public boolean isRxActive() {
         long t = lastRxTime;
         if (t == 0L) return false;
         return (System.currentTimeMillis() - t) < RX_TIMEOUT_MS;
+    }
+
+    /* Пометить приём и обновить PTT. */
+    public void markRxActivity() {
+        boolean wasActive = isRxActive();
+        lastRxTime = System.currentTimeMillis();
+        if (!wasActive) {
+            /* Переход: не было приёма → идёт приём. Включаем PTT. */
+            if (pttController != null) pttController.setPtt(true);
+        }
+    }
+
+    /* Проверить таймаут приёма — вызывать периодически. */
+    public void checkRxTimeout() {
+        if (lastRxTime == 0L) return;
+        boolean active = isRxActive();
+        if (!active && pttController != null && pttController.isPttActive()) {
+            /* Приём закончился — выключаем PTT. */
+            pttController.setPtt(false);
+        }
     }
 
     public void startPlaying() {
@@ -160,7 +174,6 @@ public class AudioEngine {
         return client >= 0 && client < SLOTS_PER_FORMAT;
     }
 
-    /* RX-уровень: RMS × DinUsildouble (если включено), делитель 25.0. */
     private void updateRxRms(byte[] pcm, int len) {
         long sum = 0;
         int n = len / 2;
@@ -172,7 +185,6 @@ public class AudioEngine {
         double mean = (double) sum / n;
         double rms = Math.sqrt(mean);
 
-        /* Читаем флаг onUsilDin и коэффициент DinUsildouble из SharedPreferences. */
         double usil = 1.0;
         try {
             android.content.SharedPreferences sp = appCtx.getSharedPreferences(
