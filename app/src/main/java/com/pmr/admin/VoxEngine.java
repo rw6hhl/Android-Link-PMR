@@ -8,15 +8,15 @@ import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 
-/* VOX-движок Android Link PMR V2.2.
+/* VOX-движок Android Link PMR V2.5.2.
  *
- * Изменения V2.2:
- *   - новый алгоритм MAX: вместо скользящего окна 3 сек —
- *     фиксация пика на 3 секунды после его появления;
- *   - при превышении текущего пика — обновляем пик и сбрасываем таймер;
- *   - при отсутствии превышений 3 секунды — сбрасываем пик в 0;
- *   - в логе параметр max3s переименован в max;
- *   - гистерезис +3 сохранён (передача при rms >= myVox + 3).
+ * Изменения V2.5.2:
+ *   - при наличии USB-микрофона (CM108) AudioRecord создаётся
+ *     через AudioRecord.Builder с setPreferredDevice() — 
+ *     гарантированное чтение с USB, а не со встроенного микрофона;
+ *   - при отсутствии USB-микрофона используется встроенный микрофон;
+ *   - heartbeat: при ошибке startRecording() — закрыть и пересоздать
+ *     AudioRecord (до 5 попыток с интервалом 2 сек).
  */
 public class VoxEngine {
 
@@ -28,9 +28,12 @@ public class VoxEngine {
     private static final double RMS_DIVISOR = 25.0;
     private static final int VOX_HYSTERESIS = 3;
 
-    /* Таймер удержания пика: 3 секунды. Один тик loop = 20 мс.
-     * 3000 мс / 20 мс = 150 тиков. */
+    /* Таймер удержания пика MAX: 3 секунды = 150 тиков по 20 мс. */
     private static final int MAX_HOLD_TICKS = 150;
+
+    /* Heartbeat: если AudioRecord не открылся — пересоздать. */
+    private static final int MAX_INIT_ATTEMPTS = 5;
+    private static final long INIT_RETRY_DELAY_MS = 2000L;
 
     private final Context appCtx;
     private final PmrSocket pmrSocket;
@@ -43,7 +46,7 @@ public class VoxEngine {
     private volatile boolean txActive = false;
     private volatile int lastRms = 0;
 
-    /* Пик RMS и таймер его удержания. */
+    /* Максимум RMS за «сеанс» — фиксация пика на 3 сек. */
     private volatile int currentMax = 0;
     private int maxHoldTimer = 0;
 
@@ -60,25 +63,7 @@ public class VoxEngine {
 
     public void start() {
         if (running) return;
-
-        logCurrentAudioDevice("VoxEngine");
-        AppLog.add("VoxEngine: использование " +
-                (isUsbPresent() ? "USB-аудио" : "встроенного микрофона"));
-
-        try {
-            recorder = new AudioRecord(
-                    MediaRecorder.AudioSource.MIC,
-                    SAMPLE_RATE,
-                    AudioFormat.CHANNEL_IN_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT,
-                    BUF_SIZE * 2);
-            recorder.startRecording();
-            AppLog.add("VoxEngine: AudioRecord init OK");
-        } catch (Exception e) {
-            AppLog.add("VoxEngine: ошибка AudioRecord — " + e);
-            recorder = null;
-            return;
-        }
+        if (!openRecorderSafe()) return;
 
         running = true;
         voxThread = new Thread(this::loop, "vox-loop");
@@ -88,6 +73,85 @@ public class VoxEngine {
 
     public void stop() {
         running = false;
+        closeRecorder();
+        voxThread = null;
+        AppLog.add("VoxEngine: поток остановлен");
+    }
+
+    /* Открытие AudioRecord с ретраями. */
+    private boolean openRecorderSafe() {
+        for (int attempt = 1; attempt <= MAX_INIT_ATTEMPTS; attempt++) {
+            if (openRecorder()) return true;
+            AppLog.add("VoxEngine: попытка " + attempt + "/"
+                    + MAX_INIT_ATTEMPTS + " не удалась, повтор через "
+                    + (INIT_RETRY_DELAY_MS / 1000) + " сек");
+            try { Thread.sleep(INIT_RETRY_DELAY_MS); }
+            catch (InterruptedException ignored) {}
+        }
+        return false;
+    }
+
+    /* Открытие AudioRecord — с явным указанием USB-устройства, если оно есть. */
+    private boolean openRecorder() {
+        try {
+            /* Ищем USB input device. */
+            AudioDeviceInfo usbInput = findUsbInputDevice();
+
+            AudioRecord.Builder builder = new AudioRecord.Builder()
+                    .setAudioSource(MediaRecorder.AudioSource.MIC)
+                    .setAudioFormat(new AudioFormat.Builder()
+                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                            .setSampleRate(SAMPLE_RATE)
+                            .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
+                            .build())
+                    .setBufferSizeInBytes(BUF_SIZE * 2);
+
+            recorder = builder.build();
+
+            /* Если USB-микрофон найден — принудительно направить на него. */
+            if (usbInput != null) {
+                boolean ok = recorder.setPreferredDevice(usbInput);
+                AppLog.add("VoxEngine: setPreferredDevice USB (name="
+                        + usbInput.getProductName() + ") → " + ok);
+            } else {
+                AppLog.add("VoxEngine: USB-микрофон не найден, используется встроенный");
+            }
+
+            /* Проверка состояния. */
+            if (recorder.getState() != AudioRecord.STATE_INITIALIZED) {
+                AppLog.add("VoxEngine: getState != INITIALIZED");
+                recorder.release();
+                recorder = null;
+                return false;
+            }
+
+            recorder.startRecording();
+
+            /* Логируем фактический маршрут. */
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                AudioDeviceInfo routed = recorder.getRoutedDevice();
+                if (routed != null) {
+                    AppLog.add("VoxEngine: routed input type="
+                            + routed.getType() + ", name="
+                            + routed.getProductName());
+                } else {
+                    AppLog.add("VoxEngine: routed input == null");
+                }
+            }
+
+            AppLog.add("VoxEngine: AudioRecord init OK");
+            return true;
+        } catch (Exception e) {
+            AppLog.add("VoxEngine: ошибка AudioRecord — " + e);
+            if (recorder != null) {
+                try { recorder.release(); } catch (Exception ignored) {}
+                recorder = null;
+            }
+            return false;
+        }
+    }
+
+    private void closeRecorder() {
         if (recorder != null) {
             try {
                 recorder.stop();
@@ -95,43 +159,25 @@ public class VoxEngine {
             } catch (Exception ignored) {}
             recorder = null;
         }
-        voxThread = null;
-        AppLog.add("VoxEngine: поток остановлен");
     }
 
-    private boolean isUsbPresent() {
+    /* Найти USB-устройство ввода. */
+    private AudioDeviceInfo findUsbInputDevice() {
         AudioManager am = (AudioManager) appCtx.getSystemService(Context.AUDIO_SERVICE);
-        if (am == null) return false;
+        if (am == null) return null;
         AudioDeviceInfo[] devs = am.getDevices(AudioManager.GET_DEVICES_INPUTS);
         for (AudioDeviceInfo d : devs) {
             int t = d.getType();
             if (t == AudioDeviceInfo.TYPE_USB_DEVICE
                     || t == AudioDeviceInfo.TYPE_USB_HEADSET
                     || t == AudioDeviceInfo.TYPE_USB_ACCESSORY) {
-                return true;
+                return d;
             }
         }
-        return false;
+        return null;
     }
 
-    private void logCurrentAudioDevice(String tag) {
-        AudioManager am = (AudioManager) appCtx.getSystemService(Context.AUDIO_SERVICE);
-        if (am == null) return;
-        AudioDeviceInfo[] devs = am.getDevices(AudioManager.GET_DEVICES_INPUTS);
-        for (AudioDeviceInfo d : devs) {
-            CharSequence pn = d.getProductName();
-            String name = (pn != null) ? pn.toString() : "?";
-            AppLog.add(tag + ": input device type=" + d.getType()
-                    + ", name=" + name);
-        }
-    }
-
-    /* Новый алгоритм MAX (V2.2).
-     *
-     * Логика:
-     *   - если rms > currentMax → обновляем пик, сбрасываем таймер;
-     *   - иначе — увеличиваем таймер, и если он достиг 3 сек —
-     *     сбрасываем пик в 0 и таймер в 0. */
+    /* Обновить пик MAX. */
     private void updateMax(int rms) {
         if (rms > currentMax) {
             currentMax = rms;
@@ -150,15 +196,33 @@ public class VoxEngine {
         byte[] g711buf = new byte[BUF_ELEMENTS];
         int silentTicks = 0;
         int diagCounter = 0;
+        int readFailCount = 0;
 
         while (running) {
             int read;
             try {
                 read = recorder.read(pcm16, 0, pcm16.length);
             } catch (Exception e) {
-                break;
+                AppLog.add("VoxEngine: read exception — " + e);
+                /* Пересоздать AudioRecord при ошибке чтения. */
+                closeRecorder();
+                if (!openRecorderSafe()) {
+                    AppLog.add("VoxEngine: пересоздание не удалось, поток остановлен");
+                    break;
+                }
+                continue;
             }
-            if (read <= 0) continue;
+            if (read <= 0) {
+                readFailCount++;
+                if (readFailCount > 50) {
+                    AppLog.add("VoxEngine: read() возвращает <=0 постоянно, пересоздание");
+                    closeRecorder();
+                    if (!openRecorderSafe()) break;
+                    readFailCount = 0;
+                }
+                continue;
+            }
+            readFailCount = 0;
 
             SharedPreferences sp = appCtx.getSharedPreferences(
                     PasswordActivity.PREFS, Context.MODE_PRIVATE);
@@ -188,7 +252,6 @@ public class VoxEngine {
             int rms = calcRms(amplified, read);
             lastRms = rms;
 
-            /* Новый алгоритм MAX. */
             updateMax(rms);
 
             diagCounter++;
@@ -233,7 +296,6 @@ public class VoxEngine {
                 continue;
             }
 
-            /* Гистерезис +3 — передача при rms >= myVox + 3. */
             if (rms >= myVox + VOX_HYSTERESIS) {
                 silentTicks = 0;
                 if (!txActive) {

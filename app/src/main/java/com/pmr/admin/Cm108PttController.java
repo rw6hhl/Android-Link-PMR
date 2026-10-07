@@ -6,23 +6,20 @@ import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbInterface;
 import android.hardware.usb.UsbManager;
+import android.media.AudioDeviceInfo;
+import android.media.AudioManager;
 
 import java.util.HashMap;
 
-/* Управление PTT через GPIO3 CM108 (Android Link PMR V2.5).
+/* Управление PTT через GPIO3 CM108 (Android Link PMR V2.5.2).
  *
- * Работает через Android USB Host API:
- *   - находит CM108 по VID:PID 0D8C:0012 (Digirig Lite);
- *   - ищет HID-интерфейс (класс USB_CLASS_HID);
- *   - открывает соединение и заявляет интерфейс;
- *   - отправляет HID Set_Output_Report через controlTransfer().
+ * Изменения V2.5.2:
+ *   - перед отправкой PTT проверяется, что AudioTrack/активное
+ *     устройство вывода — это USB-аудио (CM108). Если да —
+ *     PTT отправляется. Если нет — PTT не отправляется.
+ *     Это защищает от ложного включения PTT на встроенном динамике.
  *
  * Формат команды GPIO3: [0, 0, 4, state ? 4 : 0, 0]
- *   байт 0: report number = 0
- *   байт 1: зарезервировано = 0
- *   байт 2: iomask (data direction) = 4 (1 << 2)
- *   байт 3: iodata = 4 (вкл) или 0 (выкл)
- *   байт 4: зарезервировано = 0
  */
 public class Cm108PttController {
 
@@ -33,7 +30,6 @@ public class Cm108PttController {
     /* GPIO3: бит 2. */
     private static final int GPIO3_MASK = 1 << 2;   // 4
 
-    /* HID-константы. */
     private static final int USB_TYPE_CLASS = 0x20;
     private static final int USB_RECIP_INTERFACE = 0x01;
     private static final int USB_DIR_OUT = 0x00;
@@ -56,7 +52,6 @@ public class Cm108PttController {
     public boolean isPttActive() { return pttActive; }
     public boolean isReady()      { return ready; }
 
-    /* Инициализация: поиск CM108, открытие, заявление интерфейса. */
     public void init() {
         try {
             UsbManager usbManager = (UsbManager) appCtx.getSystemService(
@@ -82,7 +77,6 @@ public class Cm108PttController {
                 return;
             }
 
-            /* Ищем HID-интерфейс. */
             for (int i = 0; i < target.getInterfaceCount(); i++) {
                 UsbInterface ifc = target.getInterface(i);
                 if (ifc.getInterfaceClass() == UsbConstants.USB_CLASS_HID) {
@@ -118,19 +112,25 @@ public class Cm108PttController {
     /* Установить PTT (GPIO3). */
     public void setPtt(boolean on) {
         if (!ready || connection == null || hidInterface == null) {
-            /* CM108 недоступен — просто запоминаем состояние. */
             pttActive = on;
             return;
         }
+
+        /* Проверка: активное устройство вывода — USB? */
+        if (on && !isUsbOutputActive()) {
+            AppLog.add("Cm108Ptt: PTT ON отклонён — активный output не USB");
+            return;
+        }
+
         if (pttActive == on) return;
 
         try {
             byte[] data = new byte[5];
-            data[0] = 0;                        /* report number */
-            data[1] = 0;                        /* reserved */
-            data[2] = (byte) GPIO3_MASK;        /* iomask */
-            data[3] = (byte) (on ? GPIO3_MASK : 0); /* iodata */
-            data[4] = 0;                        /* reserved */
+            data[0] = 0;
+            data[1] = 0;
+            data[2] = (byte) GPIO3_MASK;
+            data[3] = (byte) (on ? GPIO3_MASK : 0);
+            data[4] = 0;
 
             int requestType = USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE;
             int result = connection.controlTransfer(
@@ -154,7 +154,23 @@ public class Cm108PttController {
         }
     }
 
-    /* Освободить ресурсы. */
+    /* Проверка: активный output — USB-аудио? */
+    private boolean isUsbOutputActive() {
+        AudioManager am = (AudioManager) appCtx.getSystemService(
+                Context.AUDIO_SERVICE);
+        if (am == null) return false;
+        AudioDeviceInfo[] devs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
+        for (AudioDeviceInfo d : devs) {
+            int t = d.getType();
+            if (t == AudioDeviceInfo.TYPE_USB_DEVICE
+                    || t == AudioDeviceInfo.TYPE_USB_HEADSET
+                    || t == AudioDeviceInfo.TYPE_USB_ACCESSORY) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public void release() {
         try {
             if (connection != null) {
