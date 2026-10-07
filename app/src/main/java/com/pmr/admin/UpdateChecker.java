@@ -12,7 +12,7 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
-/* Проверка обновлений Android Link PMR V1.9.
+/* Проверка обновлений Android Link PMR V2.0.
  *
  * Логика:
  *   - по текущей версии строит имя следующей версии APK;
@@ -160,18 +160,27 @@ public class UpdateChecker {
         }
     }
 
-    /* Диалог-подсказка после скачивания. */
+    /* Подсказка после скачивания APK — как установить.
+     *
+     * Показывает полный путь к файлу и пошаговую инструкцию.
+     * Текст адаптирован под Android Link PMR (не Admin PMR). */
     private void showInstallHint(File apk) {
+        String path = apk.getAbsolutePath();
+        String msg = "Файл сохранён:\n" + path + "\n\n"
+                + "Как установить:\n"
+                + "1. Удалите старую версию Android Link PMR "
+                + "(Настройки → Приложения → Android Link PMR → Удалить).\n"
+                + "2. Откройте проводник (Files, Мои файлы).\n"
+                + "3. Перейдите в папку Download.\n"
+                + "4. Найдите файл " + apk.getName() + ".\n"
+                + "5. Нажмите на него и установите.";
+
         new AlertDialog.Builder(ctx)
-                .setTitle("Файл сохранён")
-                .setMessage("Путь: " + apk.getAbsolutePath()
-                        + "\n\nКак установить:"
-                        + "\n1. Удалите старую версию Android Link PMR."
-                        + "\n2. Откройте проводник."
-                        + "\n3. Перейдите в папку Download."
-                        + "\n4. Найдите файл " + apk.getName() + "."
-                        + "\n5. Нажмите на него и установите.")
+                .setTitle("Готово к установке")
+                .setMessage(msg)
                 .setPositiveButton("Понятно", null)
                 .show();
+
+        AppLog.add("UpdateChecker: подсказка показана, APK=" + path);
     }
 }

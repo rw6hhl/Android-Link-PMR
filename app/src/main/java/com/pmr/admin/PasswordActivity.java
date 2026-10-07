@@ -10,15 +10,11 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран ввода пароля Android Link PMR V1.9.
+/* Экран ввода пароля Android Link PMR V2.0.
  *
- * Изменения V1.9:
- *   - DEFAULT_PRIZNAK_PMR = "26005";
- *   - DEFAULT_MY_PCHANNEL = "4";
- *   - DEFAULT_PORT_PRM = 5354;
- *   - новые: KEY_PORT_PRD, KEY_USIL_MIC, KEY_MIC_USIL,
- *            KEY_USIL_DIN, KEY_DIN_USIL, KEY_POSLE_PRD;
- *   - удалены: KEY_IP_SERVER2, DEFAULT_IP_SERVER2.
+ * Изменения V2.0:
+ *   - добавлены KEY_VOX_LOCKED и DEFAULT_VOX_LOCKED —
+ *     для сохранения состояния кнопки МАРКЕР между запусками.
  */
 public class PasswordActivity extends AppCompatActivity {
 
@@ -43,6 +39,9 @@ public class PasswordActivity extends AppCompatActivity {
     public static final String KEY_VOX_MIC    = "vox_mic";
     public static final String KEY_POSLE_PRD  = "posle_prd";
 
+    /* Состояние кнопки МАРКЕР (зафиксирован ли маркер). */
+    public static final String KEY_VOX_LOCKED = "vox_locked";
+
     /* Усиление микрофона. */
     public static final String KEY_USIL_MIC   = "on_usil_mic";
     public static final String KEY_MIC_USIL   = "mic_usil";
@@ -63,10 +62,11 @@ public class PasswordActivity extends AppCompatActivity {
     public static final String DEFAULT_CALLSIGN      = "RW6HHL";
     public static final String DEFAULT_CITY          = "Мин-Воды";
 
-    public static final int DEFAULT_MY_VOX    = 400;
-    public static final int DEFAULT_VOX_PAUSE = 30;
-    public static final int DEFAULT_VOX_MIC   = 100;
-    public static final int DEFAULT_POSLE_PRD = 3;
+    public static final int     DEFAULT_MY_VOX     = 400;
+    public static final int     DEFAULT_VOX_PAUSE  = 30;
+    public static final int     DEFAULT_VOX_MIC    = 100;
+    public static final int     DEFAULT_POSLE_PRD  = 3;
+    public static final boolean DEFAULT_VOX_LOCKED = false;
 
     /* Усиления: 0 = выключено, 1 = включено. */
     public static final int    DEFAULT_USIL_MIC = 0;

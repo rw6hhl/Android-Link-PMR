@@ -8,13 +8,12 @@ import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 
-/* VOX-движок Android Link PMR V1.9.
+/* VOX-движок Android Link PMR V2.0.
  *
- * Изменения V1.9:
- *   - блокировка VOX при приёме звука от сервера (AudioEngine.isRxActive());
- *   - блокировка VOX на PoslePrd тиков после TX OFF;
- *   - усиление микрофона через onUsilMic + MicUsildouble;
- *   - гистерезис +3 к My_Vox (как в V1.8).
+ * Изменения V2.0:
+ *   - добавлено скользящее окно максимума RMS за 3 секунды;
+ *   - метод getMaxRms3Sec() возвращает максимум за последние 3 сек;
+ *   - окно — 150 значений (по 20 мс каждое = 3 секунды).
  */
 public class VoxEngine {
 
@@ -25,6 +24,11 @@ public class VoxEngine {
 
     private static final double RMS_DIVISOR = 25.0;
     private static final int VOX_HYSTERESIS = 3;
+
+    /* Скользящее окно: 150 значений по 20 мс = 3000 мс = 3 секунды. */
+    private static final int MAX_WINDOW_SIZE = 150;
+    private final int[] maxWindow = new int[MAX_WINDOW_SIZE];
+    private int maxWindowIndex = 0;
 
     private final Context appCtx;
     private final PmrSocket pmrSocket;
@@ -37,7 +41,9 @@ public class VoxEngine {
     private volatile boolean txActive = false;
     private volatile int lastRms = 0;
 
-    /* Счётчик блокировки после TX OFF. */
+    /* Максимум за окно — volatile для чтения из UI. */
+    private volatile int maxRms3Sec = 0;
+
     private int ticPoslePrd = 0;
 
     public VoxEngine(Context ctx, PmrSocket sock) {
@@ -47,6 +53,7 @@ public class VoxEngine {
 
     public boolean isTxActive() { return txActive; }
     public int getLastRms()     { return lastRms; }
+    public int getMaxRms3Sec()  { return maxRms3Sec; }
 
     public void start() {
         if (running) return;
@@ -116,6 +123,17 @@ public class VoxEngine {
         }
     }
 
+    /* Обновить скользящее окно максимума. Вызывается в loop(). */
+    private void updateMaxWindow(int rms) {
+        maxWindow[maxWindowIndex] = rms;
+        maxWindowIndex = (maxWindowIndex + 1) % MAX_WINDOW_SIZE;
+        int m = 0;
+        for (int i = 0; i < MAX_WINDOW_SIZE; i++) {
+            if (maxWindow[i] > m) m = maxWindow[i];
+        }
+        maxRms3Sec = m;
+    }
+
     private void loop() {
         byte[] pcm16 = new byte[BUF_SIZE];
         byte[] g711buf = new byte[BUF_ELEMENTS];
@@ -159,18 +177,21 @@ public class VoxEngine {
             int rms = calcRms(amplified, read);
             lastRms = rms;
 
+            /* Обновить скользящее окно максимума за 3 секунды. */
+            updateMaxWindow(rms);
+
             diagCounter++;
             if (diagCounter >= 50) {
                 AppLog.add("VoxEngine: rms=" + rms + ", vox=" + myVox
                         + ", mic=" + voxMic + ", usil=" + micUsil
                         + ", tx=" + txActive
                         + ", prd=" + ticPoslePrd
+                        + ", max3s=" + maxRms3Sec
                         + ", rx=" + (PmrService.audioEngine != null
                                 && PmrService.audioEngine.isRxActive()));
                 diagCounter = 0;
             }
 
-            /* Блокировка VOX при приёме звука от сервера. */
             if (PmrService.audioEngine != null
                     && PmrService.audioEngine.isRxActive()) {
                 if (txActive) {
@@ -182,7 +203,6 @@ public class VoxEngine {
                 continue;
             }
 
-            /* Блокировка после TX OFF на PoslePrd тиков. */
             if (ticPoslePrd > 0) {
                 ticPoslePrd--;
                 if (txActive) {
@@ -228,7 +248,6 @@ public class VoxEngine {
         }
     }
 
-    /* Усиление микрофона: коэффициент напрямую. */
     private byte[] applyMicGain(byte[] pcm, int len, double micUsil) {
         if (micUsil <= 1.0 || micUsil <= 0.0) {
             return pcm;
@@ -250,9 +269,7 @@ public class VoxEngine {
 
         g711.encode(pcm16, 0, read, g711buf);
         int payloadLen = read / 2;
-        int secret = pmrSocket.getKanalSecretInstance();
 
-        /* Основной пакет 324 байта. Резервный больше не используется. */
         byte[] main = new byte[4 + payloadLen];
         main[0] = (byte) AudioEngine.CMD_G711_16K;
         main[1] = 0;

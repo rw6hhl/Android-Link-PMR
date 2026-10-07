@@ -37,6 +37,7 @@
             android:textSize="16sp"
             android:textColor="@color/c_black" />
 
+        <!-- Строка: VOX=N  MAX=N  RX=N  [МАРКЕР] -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -50,7 +51,16 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="VOX=0"
-                android:textSize="18sp"
+                android:textSize="16sp"
+                android:textColor="@color/c_black" />
+
+            <TextView
+                android:id="@+id/maxLevelText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="MAX=0"
+                android:textSize="16sp"
                 android:textColor="@color/c_black" />
 
             <TextView
@@ -59,15 +69,16 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="RX=0"
-                android:textSize="18sp"
+                android:textSize="16sp"
                 android:textColor="@color/c_black" />
 
             <Button
                 android:id="@+id/btnLockVox"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text=""
-                android:minWidth="60dp"
+                android:text="@string/btn_marker"
+                android:textSize="12sp"
+                android:minWidth="80dp"
                 android:minHeight="48dp"
                 android:backgroundTint="@color/c_gray" />
         </LinearLayout>

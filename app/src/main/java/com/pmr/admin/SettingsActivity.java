@@ -18,15 +18,12 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
-/* Экран настроек Android Link PMR V1.9.
+/* Экран настроек Android Link PMR V2.0.
  *
- * Изменения V1.9:
- *   - три состояния: ГОТОВ / ПЕРЕДАЧА / ПРИЕМ;
- *   - убран второй IP-сервер (regIpServer2);
- *   - добавлены поля port_prm, port_prd;
- *   - добавлены поля усилений: onUsilMic, MicUsildouble, onUsilDin, DinUsildouble;
- *   - добавлено поле PoslePrd;
- *   - убран вызов KEY_IP_SERVER2 (иначе не компилируется после V1.9 part1).
+ * Изменения V2.0:
+ *   - состояние кнопки МАРКЕР сохраняется в SharedPreferences
+ *     (KEY_VOX_LOCKED) — при перезапуске восстанавливается;
+ *   - в строке VOX=N MAX=N RX=N показывается максимум за 3 сек.
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -56,6 +53,7 @@ public class SettingsActivity extends AppCompatActivity {
     private VoxView voxView;
     private TextView voxStateText;
     private TextView voxLevelText;
+    private TextView maxLevelText;
     private TextView rxLevelText;
     private TextView myVoxText;
     private TextView usbStatusText;
@@ -102,6 +100,7 @@ public class SettingsActivity extends AppCompatActivity {
         voxView = findViewById(R.id.voxView);
         voxStateText = findViewById(R.id.voxStateText);
         voxLevelText = findViewById(R.id.voxLevelText);
+        maxLevelText = findViewById(R.id.maxLevelText);
         rxLevelText  = findViewById(R.id.rxLevelText);
         myVoxText    = findViewById(R.id.myVoxText);
         usbStatusText = findViewById(R.id.usbStatusText);
@@ -123,24 +122,12 @@ public class SettingsActivity extends AppCompatActivity {
             btnLockVox.setOnClickListener(v -> {
                 voxLocked = !voxLocked;
                 voxView.setLocked(voxLocked);
-                if (voxLocked) {
-                    btnLockVox.setBackgroundTintList(
-                            ContextCompat.getColorStateList(
-                                    SettingsActivity.this, R.color.c_red));
-                    if (voxView != null) {
-                        SharedPreferences sp = getSharedPreferences(
-                                PasswordActivity.PREFS, MODE_PRIVATE);
-                        sp.edit().putInt(PasswordActivity.KEY_MY_VOX,
-                                voxView.getMyVox()).apply();
-                        Toast.makeText(SettingsActivity.this,
-                                "My_Vox=" + voxView.getMyVox() + " зафиксирован",
-                                Toast.LENGTH_SHORT).show();
-                    }
-                } else {
-                    btnLockVox.setBackgroundTintList(
-                            ContextCompat.getColorStateList(
-                                    SettingsActivity.this, R.color.c_gray));
-                }
+                /* Сохранить состояние в SharedPreferences — переживёт перезапуск. */
+                SharedPreferences sp = getSharedPreferences(
+                        PasswordActivity.PREFS, MODE_PRIVATE);
+                sp.edit().putBoolean(PasswordActivity.KEY_VOX_LOCKED,
+                        voxLocked).apply();
+                updateLockButtonUi();
             });
         }
 
@@ -156,13 +143,29 @@ public class SettingsActivity extends AppCompatActivity {
         if (handler != null) handler.removeCallbacks(uiLoop);
     }
 
+    /* Обновить вид кнопки МАРКЕР — серый или красный. */
+    private void updateLockButtonUi() {
+        if (btnLockVox == null) return;
+        if (voxLocked) {
+            btnLockVox.setBackgroundTintList(
+                    ContextCompat.getColorStateList(
+                            SettingsActivity.this, R.color.c_red));
+        } else {
+            btnLockVox.setBackgroundTintList(
+                    ContextCompat.getColorStateList(
+                            SettingsActivity.this, R.color.c_gray));
+        }
+    }
+
     private void refreshVoxUi() {
         int voxRms = 0;
+        int maxRms = 0;
         int rxRms = 0;
         boolean txActive = false;
         boolean rxActive = false;
         if (PmrService.voxEngine != null) {
             voxRms = PmrService.voxEngine.getLastRms();
+            maxRms = PmrService.voxEngine.getMaxRms3Sec();
             txActive = PmrService.voxEngine.isTxActive();
         }
         if (PmrService.audioEngine != null) {
@@ -172,6 +175,7 @@ public class SettingsActivity extends AppCompatActivity {
 
         if (voxView != null) voxView.setCurrentRms(voxRms);
         if (voxLevelText != null) voxLevelText.setText("VOX=" + voxRms);
+        if (maxLevelText != null) maxLevelText.setText("MAX=" + maxRms);
         if (rxLevelText != null) rxLevelText.setText("RX=" + rxRms);
         if (myVoxText != null && voxView != null)
             myVoxText.setText("My_Vox=" + voxView.getMyVox());
@@ -286,6 +290,12 @@ public class SettingsActivity extends AppCompatActivity {
                     PasswordActivity.DEFAULT_MY_VOX);
             voxView.setMyVox(myVox);
         }
+
+        /* Восстановить состояние кнопки МАРКЕР. */
+        voxLocked = sp.getBoolean(PasswordActivity.KEY_VOX_LOCKED,
+                PasswordActivity.DEFAULT_VOX_LOCKED);
+        if (voxView != null) voxView.setLocked(voxLocked);
+        updateLockButtonUi();
 
         int voxPauseTicks = sp.getInt(PasswordActivity.KEY_VOX_PAUSE,
                 PasswordActivity.DEFAULT_VOX_PAUSE);
