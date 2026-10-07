@@ -8,12 +8,15 @@ import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 
-/* VOX-движок Android Link PMR V2.0.
+/* VOX-движок Android Link PMR V2.2.
  *
- * Изменения V2.0:
- *   - добавлено скользящее окно максимума RMS за 3 секунды;
- *   - метод getMaxRms3Sec() возвращает максимум за последние 3 сек;
- *   - окно — 150 значений (по 20 мс каждое = 3 секунды).
+ * Изменения V2.2:
+ *   - новый алгоритм MAX: вместо скользящего окна 3 сек —
+ *     фиксация пика на 3 секунды после его появления;
+ *   - при превышении текущего пика — обновляем пик и сбрасываем таймер;
+ *   - при отсутствии превышений 3 секунды — сбрасываем пик в 0;
+ *   - в логе параметр max3s переименован в max;
+ *   - гистерезис +3 сохранён (передача при rms >= myVox + 3).
  */
 public class VoxEngine {
 
@@ -25,10 +28,9 @@ public class VoxEngine {
     private static final double RMS_DIVISOR = 25.0;
     private static final int VOX_HYSTERESIS = 3;
 
-    /* Скользящее окно: 150 значений по 20 мс = 3000 мс = 3 секунды. */
-    private static final int MAX_WINDOW_SIZE = 150;
-    private final int[] maxWindow = new int[MAX_WINDOW_SIZE];
-    private int maxWindowIndex = 0;
+    /* Таймер удержания пика: 3 секунды. Один тик loop = 20 мс.
+     * 3000 мс / 20 мс = 150 тиков. */
+    private static final int MAX_HOLD_TICKS = 150;
 
     private final Context appCtx;
     private final PmrSocket pmrSocket;
@@ -41,8 +43,9 @@ public class VoxEngine {
     private volatile boolean txActive = false;
     private volatile int lastRms = 0;
 
-    /* Максимум за окно — volatile для чтения из UI. */
-    private volatile int maxRms3Sec = 0;
+    /* Пик RMS и таймер его удержания. */
+    private volatile int currentMax = 0;
+    private int maxHoldTimer = 0;
 
     private int ticPoslePrd = 0;
 
@@ -53,7 +56,7 @@ public class VoxEngine {
 
     public boolean isTxActive() { return txActive; }
     public int getLastRms()     { return lastRms; }
-    public int getMaxRms3Sec()  { return maxRms3Sec; }
+    public int getMaxRms3Sec()  { return currentMax; }
 
     public void start() {
         if (running) return;
@@ -123,15 +126,23 @@ public class VoxEngine {
         }
     }
 
-    /* Обновить скользящее окно максимума. Вызывается в loop(). */
-    private void updateMaxWindow(int rms) {
-        maxWindow[maxWindowIndex] = rms;
-        maxWindowIndex = (maxWindowIndex + 1) % MAX_WINDOW_SIZE;
-        int m = 0;
-        for (int i = 0; i < MAX_WINDOW_SIZE; i++) {
-            if (maxWindow[i] > m) m = maxWindow[i];
+    /* Новый алгоритм MAX (V2.2).
+     *
+     * Логика:
+     *   - если rms > currentMax → обновляем пик, сбрасываем таймер;
+     *   - иначе — увеличиваем таймер, и если он достиг 3 сек —
+     *     сбрасываем пик в 0 и таймер в 0. */
+    private void updateMax(int rms) {
+        if (rms > currentMax) {
+            currentMax = rms;
+            maxHoldTimer = 0;
+        } else {
+            maxHoldTimer++;
+            if (maxHoldTimer >= MAX_HOLD_TICKS) {
+                currentMax = 0;
+                maxHoldTimer = 0;
+            }
         }
-        maxRms3Sec = m;
     }
 
     private void loop() {
@@ -177,8 +188,8 @@ public class VoxEngine {
             int rms = calcRms(amplified, read);
             lastRms = rms;
 
-            /* Обновить скользящее окно максимума за 3 секунды. */
-            updateMaxWindow(rms);
+            /* Новый алгоритм MAX. */
+            updateMax(rms);
 
             diagCounter++;
             if (diagCounter >= 50) {
@@ -186,7 +197,7 @@ public class VoxEngine {
                         + ", mic=" + voxMic + ", usil=" + micUsil
                         + ", tx=" + txActive
                         + ", prd=" + ticPoslePrd
-                        + ", max3s=" + maxRms3Sec
+                        + ", max=" + currentMax
                         + ", rx=" + (PmrService.audioEngine != null
                                 && PmrService.audioEngine.isRxActive()));
                 diagCounter = 0;
@@ -222,6 +233,7 @@ public class VoxEngine {
                 continue;
             }
 
+            /* Гистерезис +3 — передача при rms >= myVox + 3. */
             if (rms >= myVox + VOX_HYSTERESIS) {
                 silentTicks = 0;
                 if (!txActive) {

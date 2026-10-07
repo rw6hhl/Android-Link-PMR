@@ -18,12 +18,12 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
-/* Экран настроек Android Link PMR V2.0.
+/* Экран настроек Android Link PMR V2.2.
  *
- * Изменения V2.0:
- *   - состояние кнопки МАРКЕР сохраняется в SharedPreferences
- *     (KEY_VOX_LOCKED) — при перезапуске восстанавливается;
- *   - в строке VOX=N MAX=N RX=N показывается максимум за 3 сек.
+ * Изменения V2.2:
+ *   - автосохранение My_Vox при перемещении маркера
+ *     (через listener.onVoxChanged);
+ *   - остальное как в V2.0.
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -118,15 +118,26 @@ public class SettingsActivity extends AppCompatActivity {
             startActivity(i);
         });
 
+        /* Listener для автосохранения My_Vox при перемещении маркера. */
+        if (voxView != null) {
+            voxView.setListener(myVox -> {
+                SharedPreferences sp = getSharedPreferences(
+                        PasswordActivity.PREFS, MODE_PRIVATE);
+                sp.edit().putInt(PasswordActivity.KEY_MY_VOX, myVox).apply();
+            });
+        }
+
         if (btnLockVox != null) {
             btnLockVox.setOnClickListener(v -> {
                 voxLocked = !voxLocked;
                 voxView.setLocked(voxLocked);
-                /* Сохранить состояние в SharedPreferences — переживёт перезапуск. */
                 SharedPreferences sp = getSharedPreferences(
                         PasswordActivity.PREFS, MODE_PRIVATE);
                 sp.edit().putBoolean(PasswordActivity.KEY_VOX_LOCKED,
                         voxLocked).apply();
+                /* Дополнительно — зафиксировать текущий My_Vox. */
+                sp.edit().putInt(PasswordActivity.KEY_MY_VOX,
+                        voxView.getMyVox()).apply();
                 updateLockButtonUi();
             });
         }
@@ -143,7 +154,6 @@ public class SettingsActivity extends AppCompatActivity {
         if (handler != null) handler.removeCallbacks(uiLoop);
     }
 
-    /* Обновить вид кнопки МАРКЕР — серый или красный. */
     private void updateLockButtonUi() {
         if (btnLockVox == null) return;
         if (voxLocked) {
@@ -291,7 +301,6 @@ public class SettingsActivity extends AppCompatActivity {
             voxView.setMyVox(myVox);
         }
 
-        /* Восстановить состояние кнопки МАРКЕР. */
         voxLocked = sp.getBoolean(PasswordActivity.KEY_VOX_LOCKED,
                 PasswordActivity.DEFAULT_VOX_LOCKED);
         if (voxView != null) voxView.setLocked(voxLocked);
