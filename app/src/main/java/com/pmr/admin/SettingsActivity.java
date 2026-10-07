@@ -3,8 +3,6 @@ package com.pmr.admin;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.media.AudioDeviceInfo;
-import android.media.AudioManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -18,12 +16,12 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
-/* Экран настроек Android Link PMR V2.2.
+/* Экран настроек Android Link PMR V3.0.
  *
- * Изменения V2.2:
- *   - автосохранение My_Vox при перемещении маркера
- *     (через listener.onVoxChanged);
- *   - остальное как в V2.0.
+ * Изменения V3.0:
+ *   - добавлено поле ptt_tone_level (уровень тона 1000 Гц, 0..100 %);
+ *   - индикатор PTT отражает isRxActive() — приём звука от сервера;
+ *   - убрано отображение USB-статуса (внешняя карта не используется).
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -49,14 +47,15 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText voxPauseInput;
     private EditText voxMicInput;
     private EditText poslePrdInput;
+    private EditText pttToneLevelInput;
 
     private VoxView voxView;
     private TextView voxStateText;
+    private TextView pttStateText;
     private TextView voxLevelText;
     private TextView maxLevelText;
     private TextView rxLevelText;
     private TextView myVoxText;
-    private TextView usbStatusText;
     private Button btnLockVox;
 
     private boolean voxLocked = false;
@@ -66,7 +65,6 @@ public class SettingsActivity extends AppCompatActivity {
         @Override
         public void run() {
             refreshVoxUi();
-            refreshUsbUi();
             handler.postDelayed(this, 100);
         }
     };
@@ -99,14 +97,15 @@ public class SettingsActivity extends AppCompatActivity {
 
         voxView = findViewById(R.id.voxView);
         voxStateText = findViewById(R.id.voxStateText);
+        pttStateText = findViewById(R.id.pttStateText);
         voxLevelText = findViewById(R.id.voxLevelText);
         maxLevelText = findViewById(R.id.maxLevelText);
         rxLevelText  = findViewById(R.id.rxLevelText);
         myVoxText    = findViewById(R.id.myVoxText);
-        usbStatusText = findViewById(R.id.usbStatusText);
         voxPauseInput = findViewById(R.id.voxPauseInput);
         voxMicInput   = findViewById(R.id.voxMicInput);
         poslePrdInput = findViewById(R.id.poslePrdInput);
+        pttToneLevelInput = findViewById(R.id.pttToneLevelInput);
         btnLockVox = findViewById(R.id.btnLockVox);
 
         Button saveBtn = findViewById(R.id.btnSaveSettings);
@@ -135,7 +134,6 @@ public class SettingsActivity extends AppCompatActivity {
                         PasswordActivity.PREFS, MODE_PRIVATE);
                 sp.edit().putBoolean(PasswordActivity.KEY_VOX_LOCKED,
                         voxLocked).apply();
-                /* Дополнительно — зафиксировать текущий My_Vox. */
                 sp.edit().putInt(PasswordActivity.KEY_MY_VOX,
                         voxView.getMyVox()).apply();
                 updateLockButtonUi();
@@ -201,31 +199,9 @@ public class SettingsActivity extends AppCompatActivity {
             }
             voxStateText.setText(state);
         }
-    }
 
-    private void refreshUsbUi() {
-        if (usbStatusText == null) return;
-        AudioManager am = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        if (am == null) {
-            usbStatusText.setText("USB-аудио: недоступно");
-            return;
-        }
-        String name = null;
-        AudioDeviceInfo[] devs = am.getDevices(AudioManager.GET_DEVICES_ALL);
-        for (AudioDeviceInfo d : devs) {
-            int t = d.getType();
-            if (t == AudioDeviceInfo.TYPE_USB_DEVICE
-                    || t == AudioDeviceInfo.TYPE_USB_HEADSET
-                    || t == AudioDeviceInfo.TYPE_USB_ACCESSORY) {
-                CharSequence pn = d.getProductName();
-                name = (pn != null) ? pn.toString() : "USB-аудио";
-                break;
-            }
-        }
-        if (name != null) {
-            usbStatusText.setText("USB-аудио: ПОДКЛЮЧЕНО — " + name);
-        } else {
-            usbStatusText.setText("USB-аудио: НЕ ПОДКЛЮЧЕНО (используется встроенное)");
+        if (pttStateText != null) {
+            pttStateText.setText(rxActive ? "PTT: ВКЛ" : "PTT: ВЫКЛ");
         }
     }
 
@@ -320,6 +296,11 @@ public class SettingsActivity extends AppCompatActivity {
                 PasswordActivity.DEFAULT_POSLE_PRD);
         if (poslePrdInput != null)
             poslePrdInput.setText(String.valueOf(poslePrd));
+
+        int pttToneLevel = sp.getInt(PasswordActivity.KEY_PTT_TONE_LEVEL,
+                PasswordActivity.DEFAULT_PTT_TONE_LEVEL);
+        if (pttToneLevelInput != null)
+            pttToneLevelInput.setText(String.valueOf(pttToneLevel));
     }
 
     private void saveSettings() {
@@ -358,6 +339,15 @@ public class SettingsActivity extends AppCompatActivity {
                 if (v < 0) v = 0;
                 if (v > 1000) v = 1000;
                 sp.edit().putInt(PasswordActivity.KEY_POSLE_PRD, v).apply();
+            } catch (NumberFormatException ignored) {}
+        }
+
+        if (pttToneLevelInput != null) {
+            try {
+                int v = Integer.parseInt(pttToneLevelInput.getText().toString().trim());
+                if (v < 0) v = 0;
+                if (v > 100) v = 100;
+                sp.edit().putInt(PasswordActivity.KEY_PTT_TONE_LEVEL, v).apply();
             } catch (NumberFormatException ignored) {}
         }
 

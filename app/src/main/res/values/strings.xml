@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Android Link PMR</string>
-    <string name="app_version">V2.7</string>
+    <string name="app_version">V3.0</string>
 
     <string name="password_hint">Пароль</string>
     <string name="password_btn">ВОЙТИ</string>
@@ -35,7 +35,7 @@
 
     <string name="notif_channel">Android Link PMR</string>
     <string name="notif_title">Android Link PMR работает</string>
-    <string name="notif_text">VOX активен, связь с сервером PMR установлена</string>
+    <string name="notif_text">VOX активен, PTT-tone 1000 Гц</string>
 
     <string name="check_title">ПРОВЕРКА СИСТЕМЫ</string>
     <string name="check_server">Сервер PMR</string>

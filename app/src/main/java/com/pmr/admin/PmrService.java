@@ -14,12 +14,11 @@ import androidx.core.app.NotificationCompat;
 import java.io.File;
 import java.io.InputStream;
 
-/* Foreground Service Android Link PMR V2.5.
+/* Foreground Service Android Link PMR V3.0.
  *
- * Изменения V2.5:
- *   - создаётся Cm108PttController;
- *   - передаётся в AudioEngine;
- *   - checkRxTimeout вызывается в timerLoop PmrSocket.
+ * Изменения V3.0:
+ *   - убран Cm108PttController — PTT теперь через тон 1000 Гц
+ *     на левом канале аудиовыхода (генерируется в AudioEngine).
  */
 public class PmrService extends Service {
 
@@ -34,13 +33,12 @@ public class PmrService extends Service {
     public static PmrSocket pmrSocket;
     public static AudioEngine audioEngine;
     public static VoxEngine voxEngine;
-    public static Cm108PttController pttController;
 
     @Override
     public void onCreate() {
         super.onCreate();
 
-        AppLog.add("PmrService.onCreate() — старт V2.5 Android Link PMR");
+        AppLog.add("PmrService.onCreate() — старт V3.0 Android Link PMR");
 
         File dir = getFilesDir();
         File listTxt = new File(dir, "list.txt");
@@ -74,11 +72,6 @@ public class PmrService extends Service {
         audioEngine.startPlaying();
         pmrSocket.setAudioEngine(audioEngine);
 
-        /* PTT через CM108 GPIO3. */
-        pttController = new Cm108PttController(getApplicationContext());
-        pttController.init();
-        audioEngine.setPttController(pttController);
-
         voxEngine = new VoxEngine(getApplicationContext(), pmrSocket);
         voxEngine.start();
 
@@ -87,7 +80,7 @@ public class PmrService extends Service {
         createChannel();
         startForeground(NOTIF_ID, buildNotification());
 
-        AppLog.add("PmrService: служба запущена, VOX активен, PTT-контроллер инициализирован");
+        AppLog.add("PmrService: служба запущена, VOX активен, PTT-tone 1000 Гц");
     }
 
     @Override
@@ -103,9 +96,6 @@ public class PmrService extends Service {
         }
         if (audioEngine != null) {
             try { audioEngine.stopPlaying(); } catch (Exception ignored) {}
-        }
-        if (pttController != null) {
-            try { pttController.release(); } catch (Exception ignored) {}
         }
         if (pmrSocket != null) pmrSocket.stop();
         super.onDestroy();

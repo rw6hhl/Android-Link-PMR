@@ -2,22 +2,17 @@ package com.pmr.admin;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.media.AudioDeviceInfo;
 import android.media.AudioFormat;
-import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 
-/* VOX-движок Android Link PMR V2.7.
+/* VOX-движок Android Link PMR V3.0.
  *
- * Изменения V2.7:
- *   - возвращён setPreferredDevice — AudioRecord создаётся через
- *     AudioRecord.Builder с принудительным направлением на USB-микрофон;
- *   - добавлен fallback: если USB-микрофон молчит > 5 секунд
- *     (rms == 0), AudioRecord пересоздаётся БЕЗ setPreferredDevice —
- *     Android берёт встроенный микрофон;
- *   - heartbeat: при ошибке startRecording() — закрыть и пересоздать
- *     AudioRecord (до 5 попыток с интервалом 2 сек).
+ * Изменения V3.0:
+ *   - убран setPreferredDevice — USB-аудио не используется;
+ *   - используется встроенный микрофон телефона;
+ *   - heartbeat сохранён (пересоздание AudioRecord при ошибке);
+ *   - алгоритм MAX (фиксация пика на 3 сек) сохранён.
  */
 public class VoxEngine {
 
@@ -36,10 +31,6 @@ public class VoxEngine {
     private static final int MAX_INIT_ATTEMPTS = 5;
     private static final long INIT_RETRY_DELAY_MS = 2000L;
 
-    /* Fallback: если USB-микрофон молчит 5 секунд (250 тиков по 20 мс),
-     * пересоздать AudioRecord без setPreferredDevice. */
-    private static final int FALLBACK_SILENT_TICKS = 250;
-
     private final Context appCtx;
     private final PmrSocket pmrSocket;
     private final G711Ua g711 = new G711Ua();
@@ -56,9 +47,6 @@ public class VoxEngine {
     private int maxHoldTimer = 0;
 
     private int ticPoslePrd = 0;
-
-    /* Fallback: если долго rms=0 при активном USB — отключаем USB. */
-    private boolean usbDisabled = false;
 
     public VoxEngine(Context ctx, PmrSocket sock) {
         this.appCtx = ctx;
@@ -86,7 +74,6 @@ public class VoxEngine {
         AppLog.add("VoxEngine: поток остановлен");
     }
 
-    /* Открытие AudioRecord с ретраями. */
     private boolean openRecorderSafe() {
         for (int attempt = 1; attempt <= MAX_INIT_ATTEMPTS; attempt++) {
             if (openRecorder()) return true;
@@ -99,38 +86,16 @@ public class VoxEngine {
         return false;
     }
 
-    /* Открытие AudioRecord — с явным указанием USB-устройства, если оно есть. */
+    /* Открытие AudioRecord — встроенный микрофон. */
     private boolean openRecorder() {
         try {
-            /* Ищем USB input device (только если не отключён fallback'ом). */
-            AudioDeviceInfo usbInput = null;
-            if (!usbDisabled) {
-                usbInput = findUsbInputDevice();
-            }
+            recorder = new AudioRecord(
+                    MediaRecorder.AudioSource.MIC,
+                    SAMPLE_RATE,
+                    AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT,
+                    BUF_SIZE * 2);
 
-            AudioRecord.Builder builder = new AudioRecord.Builder()
-                    .setAudioSource(MediaRecorder.AudioSource.MIC)
-                    .setAudioFormat(new AudioFormat.Builder()
-                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                            .setSampleRate(SAMPLE_RATE)
-                            .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
-                            .build())
-                    .setBufferSizeInBytes(BUF_SIZE * 2);
-
-            recorder = builder.build();
-
-            /* Если USB-микрофон найден и не отключён — направить на него. */
-            if (usbInput != null) {
-                boolean ok = recorder.setPreferredDevice(usbInput);
-                AppLog.add("VoxEngine: setPreferredDevice USB (name="
-                        + usbInput.getProductName() + ") → " + ok);
-            } else if (usbDisabled) {
-                AppLog.add("VoxEngine: USB отключён fallback'ом, используется встроенный");
-            } else {
-                AppLog.add("VoxEngine: USB-микрофон не найден, используется встроенный");
-            }
-
-            /* Проверка состояния. */
             if (recorder.getState() != AudioRecord.STATE_INITIALIZED) {
                 AppLog.add("VoxEngine: getState != INITIALIZED");
                 recorder.release();
@@ -139,20 +104,7 @@ public class VoxEngine {
             }
 
             recorder.startRecording();
-
-            /* Логируем фактический маршрут. */
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-                AudioDeviceInfo routed = recorder.getRoutedDevice();
-                if (routed != null) {
-                    AppLog.add("VoxEngine: routed input type="
-                            + routed.getType() + ", name="
-                            + routed.getProductName());
-                } else {
-                    AppLog.add("VoxEngine: routed input == null");
-                }
-            }
-
-            AppLog.add("VoxEngine: AudioRecord init OK");
+            AppLog.add("VoxEngine: AudioRecord init OK (встроенный микрофон)");
             return true;
         } catch (Exception e) {
             AppLog.add("VoxEngine: ошибка AudioRecord — " + e);
@@ -174,23 +126,6 @@ public class VoxEngine {
         }
     }
 
-    /* Найти USB-устройство ввода. */
-    private AudioDeviceInfo findUsbInputDevice() {
-        AudioManager am = (AudioManager) appCtx.getSystemService(Context.AUDIO_SERVICE);
-        if (am == null) return null;
-        AudioDeviceInfo[] devs = am.getDevices(AudioManager.GET_DEVICES_INPUTS);
-        for (AudioDeviceInfo d : devs) {
-            int t = d.getType();
-            if (t == AudioDeviceInfo.TYPE_USB_DEVICE
-                    || t == AudioDeviceInfo.TYPE_USB_HEADSET
-                    || t == AudioDeviceInfo.TYPE_USB_ACCESSORY) {
-                return d;
-            }
-        }
-        return null;
-    }
-
-    /* Обновить пик MAX. */
     private void updateMax(int rms) {
         if (rms > currentMax) {
             currentMax = rms;
@@ -210,7 +145,6 @@ public class VoxEngine {
         int silentTicks = 0;
         int diagCounter = 0;
         int readFailCount = 0;
-        int usbSilentTicks = 0;
 
         while (running) {
             int read;
@@ -267,25 +201,6 @@ public class VoxEngine {
 
             updateMax(rms);
 
-            /* Fallback: если USB активен и rms=0 больше 5 секунд —
-             * отключить USB и пересоздать AudioRecord. */
-            if (!usbDisabled && findUsbInputDevice() != null) {
-                if (rms == 0) {
-                    usbSilentTicks++;
-                    if (usbSilentTicks >= FALLBACK_SILENT_TICKS) {
-                        AppLog.add("VoxEngine: fallback — USB молчит "
-                                + (FALLBACK_SILENT_TICKS * 20) + " мс, отключаем USB");
-                        usbDisabled = true;
-                        usbSilentTicks = 0;
-                        closeRecorder();
-                        if (!openRecorderSafe()) break;
-                        continue;
-                    }
-                } else {
-                    usbSilentTicks = 0;
-                }
-            }
-
             diagCounter++;
             if (diagCounter >= 50) {
                 AppLog.add("VoxEngine: rms=" + rms + ", vox=" + myVox
@@ -293,7 +208,6 @@ public class VoxEngine {
                         + ", tx=" + txActive
                         + ", prd=" + ticPoslePrd
                         + ", max=" + currentMax
-                        + ", usbOff=" + usbDisabled
                         + ", rx=" + (PmrService.audioEngine != null
                                 && PmrService.audioEngine.isRxActive()));
                 diagCounter = 0;

@@ -10,11 +10,11 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран ввода пароля Android Link PMR V2.0.
+/* Экран ввода пароля Android Link PMR V3.0.
  *
- * Изменения V2.0:
- *   - добавлены KEY_VOX_LOCKED и DEFAULT_VOX_LOCKED —
- *     для сохранения состояния кнопки МАРКЕР между запусками.
+ * Изменения V3.0:
+ *   - добавлен KEY_PTT_TONE_LEVEL / DEFAULT_PTT_TONE_LEVEL —
+ *     уровень тона PTT 1000 Гц (0..100 %), по умолчанию 50.
  */
 public class PasswordActivity extends AppCompatActivity {
 
@@ -38,9 +38,10 @@ public class PasswordActivity extends AppCompatActivity {
     public static final String KEY_VOX_PAUSE  = "vox_pause";
     public static final String KEY_VOX_MIC    = "vox_mic";
     public static final String KEY_POSLE_PRD  = "posle_prd";
-
-    /* Состояние кнопки МАРКЕР (зафиксирован ли маркер). */
     public static final String KEY_VOX_LOCKED = "vox_locked";
+
+    /* Уровень PTT-тона (0..100 %). */
+    public static final String KEY_PTT_TONE_LEVEL = "ptt_tone_level";
 
     /* Усиление микрофона. */
     public static final String KEY_USIL_MIC   = "on_usil_mic";
@@ -67,6 +68,9 @@ public class PasswordActivity extends AppCompatActivity {
     public static final int     DEFAULT_VOX_MIC    = 100;
     public static final int     DEFAULT_POSLE_PRD  = 3;
     public static final boolean DEFAULT_VOX_LOCKED = false;
+
+    /* Уровень тона 1000 Гц: 0..100 %, по умолчанию 50 %. */
+    public static final int     DEFAULT_PTT_TONE_LEVEL = 50;
 
     /* Усиления: 0 = выключено, 1 = включено. */
     public static final int    DEFAULT_USIL_MIC = 0;

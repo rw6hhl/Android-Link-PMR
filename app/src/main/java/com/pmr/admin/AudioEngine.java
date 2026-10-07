@@ -1,16 +1,21 @@
 package com.pmr.admin;
 
 import android.content.Context;
-import android.media.AudioDeviceInfo;
+import android.content.SharedPreferences;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
 
-/* Звуковой движок Android Link PMR V2.5.
+/* Звуковой движок Android Link PMR V3.0.
  *
- * Изменения V2.5:
- *   - при смене состояния RX (есть/нет приём) — управление PTT CM108;
- *   - включение PTT при первом пакете, выключение через RX_TIMEOUT_MS.
+ * Изменения V3.0:
+ *   - СТЕРЕО-вывод: правый канал (R) — звук от сервера,
+ *     левый канал (L) — тональный сигнал PTT 1000 Гц
+ *     при isRxActive() == true;
+ *   - амплитуда тона настраивается через KEY_PTT_TONE_LEVEL
+ *     (0..100 %), по умолчанию 50 %;
+ *   - убрано всё, что связано с USB-аудио (внешняя карта не используется);
+ *   - PTT-контроллер CM108 больше не подключается.
  */
 public class AudioEngine {
 
@@ -30,6 +35,9 @@ public class AudioEngine {
     private static final double RMS_DIVISOR = 25.0;
     private static final long RX_TIMEOUT_MS = 500L;
 
+    /* PTT-тон 1000 Гц. */
+    private static final int PTT_TONE_HZ = 1000;
+
     private final Context appCtx;
     private final PmrSocket pmrSocket;
     private final G711Ua g711 = new G711Ua();
@@ -39,16 +47,14 @@ public class AudioEngine {
     private volatile int lastRxRms = 0;
     private volatile long lastRxTime = 0L;
 
-    /* PTT-контроллер CM108. */
-    private Cm108PttController pttController = null;
+    /* Фаза генератора тона 1000 Гц (в радианах). */
+    private double tonePhase = 0.0;
+    private static final double TONE_DPHASE =
+            2.0 * Math.PI * PTT_TONE_HZ / SAMPLE_RATE_16K;
 
     public AudioEngine(Context ctx, PmrSocket sock) {
         this.appCtx = ctx;
         this.pmrSocket = sock;
-    }
-
-    public void setPttController(Cm108PttController c) {
-        this.pttController = c;
     }
 
     public boolean isPlaying() { return isPlaying; }
@@ -59,51 +65,39 @@ public class AudioEngine {
         return (System.currentTimeMillis() - t) < RX_TIMEOUT_MS;
     }
 
-    /* Пометить приём и обновить PTT. */
+    /* Пометить приём. */
     public void markRxActivity() {
-        boolean wasActive = isRxActive();
         lastRxTime = System.currentTimeMillis();
-        if (!wasActive) {
-            /* Переход: не было приёма → идёт приём. Включаем PTT. */
-            if (pttController != null) pttController.setPtt(true);
-        }
     }
 
-    /* Проверить таймаут приёма — вызывать периодически. */
+    /* Проверка таймаута приёма. */
     public void checkRxTimeout() {
-        if (lastRxTime == 0L) return;
-        boolean active = isRxActive();
-        if (!active && pttController != null && pttController.isPttActive()) {
-            /* Приём закончился — выключаем PTT. */
-            pttController.setPtt(false);
-        }
+        /* Ничего не делаем — тон 1000 Гц гаснет автоматически,
+         * как только isRxActive() вернёт false (по таймауту). */
     }
 
     public void startPlaying() {
         if (isPlaying) return;
 
-        logCurrentAudioDevice("AudioEngine");
-        AppLog.add("AudioEngine: использование " +
-                (isUsbPresent() ? "USB-аудио" : "встроенного динамика"));
+        AppLog.add("AudioEngine V3.0: старт, стерео-вывод");
 
         int minSize16 = AudioTrack.getMinBufferSize(SAMPLE_RATE_16K,
-                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.CHANNEL_OUT_STEREO,
                 AudioFormat.ENCODING_PCM_16BIT);
         int minSize8 = AudioTrack.getMinBufferSize(SAMPLE_RATE_8K,
-                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.CHANNEL_OUT_STEREO,
                 AudioFormat.ENCODING_PCM_16BIT);
         AppLog.add("AudioEngine: minBufferSize16=" + minSize16
-                + " (" + (minSize16 / 32) + " мс), minBufferSize8="
-                + minSize8 + " (" + (minSize8 / 16) + " мс)");
+                + ", minBufferSize8=" + minSize8);
 
         for (int i = 0; i < SLOTS_PER_FORMAT; i++) {
             if (tracks[i] == null) {
                 tracks[i] = new AudioTrack(
                         AudioManager.STREAM_MUSIC,
                         SAMPLE_RATE_16K,
-                        AudioFormat.CHANNEL_OUT_MONO,
+                        AudioFormat.CHANNEL_OUT_STEREO,
                         AudioFormat.ENCODING_PCM_16BIT,
-                        minSize16,
+                        minSize16 * 2,
                         AudioTrack.MODE_STREAM);
                 try { tracks[i].setVolume(VOLUME_BOOST); } catch (Exception ignored) {}
             }
@@ -113,9 +107,9 @@ public class AudioEngine {
                 tracks[i] = new AudioTrack(
                         AudioManager.STREAM_MUSIC,
                         SAMPLE_RATE_8K,
-                        AudioFormat.CHANNEL_OUT_MONO,
+                        AudioFormat.CHANNEL_OUT_STEREO,
                         AudioFormat.ENCODING_PCM_16BIT,
-                        minSize8,
+                        minSize8 * 2,
                         AudioTrack.MODE_STREAM);
                 try { tracks[i].setVolume(VOLUME_BOOST); } catch (Exception ignored) {}
             }
@@ -139,39 +133,75 @@ public class AudioEngine {
         }
     }
 
-    private boolean isUsbPresent() {
-        AudioManager am = (AudioManager) appCtx.getSystemService(Context.AUDIO_SERVICE);
-        if (am == null) return false;
-        AudioDeviceInfo[] devs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
-        for (AudioDeviceInfo d : devs) {
-            int t = d.getType();
-            if (t == AudioDeviceInfo.TYPE_USB_DEVICE
-                    || t == AudioDeviceInfo.TYPE_USB_HEADSET
-                    || t == AudioDeviceInfo.TYPE_USB_ACCESSORY) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private void logCurrentAudioDevice(String tag) {
-        AudioManager am = (AudioManager) appCtx.getSystemService(Context.AUDIO_SERVICE);
-        if (am == null) return;
-        AudioDeviceInfo[] devs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
-        for (AudioDeviceInfo d : devs) {
-            CharSequence pn = d.getProductName();
-            String name = (pn != null) ? pn.toString() : "?";
-            AppLog.add(tag + ": output device type=" + d.getType()
-                    + ", name=" + name);
-        }
-    }
-
     private boolean isValid16(int client) {
         return client >= 0 && client < SLOTS_PER_FORMAT;
     }
 
     private boolean isValid8(int client) {
         return client >= 0 && client < SLOTS_PER_FORMAT;
+    }
+
+    /* Получить текущий уровень PTT-тона (0..100 %). */
+    private int getPttToneLevel() {
+        try {
+            SharedPreferences sp = appCtx.getSharedPreferences(
+                    PasswordActivity.PREFS, Context.MODE_PRIVATE);
+            return sp.getInt(PasswordActivity.KEY_PTT_TONE_LEVEL,
+                    PasswordActivity.DEFAULT_PTT_TONE_LEVEL);
+        } catch (Exception e) {
+            return PasswordActivity.DEFAULT_PTT_TONE_LEVEL;
+        }
+    }
+
+    /* Формирование стерео-буфера: PCM моно → стерео.
+     *  L = тон 1000 Гц (если приём активен)
+     *  R = принимаемый PCM
+     */
+    private byte[] buildStereoBuffer(byte[] pcmMono) {
+        int n = pcmMono.length / 2;
+        byte[] out = new byte[n * 4];
+        boolean rxActive = isRxActive();
+        int toneLevel = getPttToneLevel();
+        if (toneLevel < 0) toneLevel = 0;
+        if (toneLevel > 100) toneLevel = 100;
+        int toneAmp = (int) (32767.0 * toneLevel / 100.0);
+
+        for (int i = 0; i < n; i++) {
+            /* L — тон 1000 Гц. */
+            short left;
+            if (rxActive) {
+                left = (short) (toneAmp * Math.sin(tonePhase));
+                tonePhase += TONE_DPHASE;
+                if (tonePhase >= 2.0 * Math.PI) tonePhase -= 2.0 * Math.PI;
+            } else {
+                left = 0;
+                tonePhase = 0.0;
+            }
+
+            /* R — PCM. */
+            short right = (short) ((pcmMono[i * 2] & 0xFF)
+                    | (pcmMono[i * 2 + 1] << 8));
+
+            int idx = i * 4;
+            out[idx]     = (byte) (left & 0xFF);
+            out[idx + 1] = (byte) ((left >> 8) & 0xFF);
+            out[idx + 2] = (byte) (right & 0xFF);
+            out[idx + 3] = (byte) ((right >> 8) & 0xFF);
+        }
+        return out;
+    }
+
+    /* Декодирование и воспроизведение через стерео. */
+    private void playPcm(int trackSlot, byte[] pcmMono) {
+        if (trackSlot < 0 || trackSlot >= tracks.length) return;
+        if (tracks[trackSlot] == null) return;
+        byte[] stereo = buildStereoBuffer(pcmMono);
+        try {
+            tracks[trackSlot].write(stereo, 0, stereo.length);
+            if (tracks[trackSlot].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
+                tracks[trackSlot].play();
+            }
+        } catch (Exception ignored) {}
     }
 
     private void updateRxRms(byte[] pcm, int len) {
@@ -187,7 +217,7 @@ public class AudioEngine {
 
         double usil = 1.0;
         try {
-            android.content.SharedPreferences sp = appCtx.getSharedPreferences(
+            SharedPreferences sp = appCtx.getSharedPreferences(
                     PasswordActivity.PREFS, Context.MODE_PRIVATE);
             int onUsilDin = sp.getInt(PasswordActivity.KEY_USIL_DIN,
                     PasswordActivity.DEFAULT_USIL_DIN);
@@ -214,12 +244,7 @@ public class AudioEngine {
         byte[] pcm = new byte[640];
         g711.decode(buf, 4, 320, pcm);
         updateRxRms(pcm, 640);
-        try {
-            tracks[client].write(pcm, 0, 640);
-            if (tracks[client].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
-                tracks[client].play();
-            }
-        } catch (Exception ignored) {}
+        playPcm(client, pcm);
     }
 
     public void playG711_8k(int client, byte[] buf, int len) {
@@ -229,37 +254,26 @@ public class AudioEngine {
         byte[] pcm = new byte[320];
         g711.decode(buf, 4, 160, pcm);
         updateRxRms(pcm, 320);
-        try {
-            tracks[slot].write(pcm, 0, 320);
-            if (tracks[slot].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
-                tracks[slot].play();
-            }
-        } catch (Exception ignored) {}
+        playPcm(slot, pcm);
     }
 
     public void playPCM16_16k(int client, byte[] buf, int len) {
         if (!isPlaying || !isValid16(client)) return;
         if (tracks[client] == null) return;
-        updateRxRms(buf, 640);
-        try {
-            tracks[client].write(buf, 4, 640);
-            if (tracks[client].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
-                tracks[client].play();
-            }
-        } catch (Exception ignored) {}
+        byte[] pcm = new byte[640];
+        System.arraycopy(buf, 4, pcm, 0, 640);
+        updateRxRms(pcm, 640);
+        playPcm(client, pcm);
     }
 
     public void playPCM16_8k(int client, byte[] buf, int len) {
         if (!isPlaying || !isValid8(client)) return;
         int slot = client + OFFSET_8K;
         if (tracks[slot] == null) return;
-        updateRxRms(buf, 320);
-        try {
-            tracks[slot].write(buf, 4, 320);
-            if (tracks[slot].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
-                tracks[slot].play();
-            }
-        } catch (Exception ignored) {}
+        byte[] pcm = new byte[320];
+        System.arraycopy(buf, 4, pcm, 0, 320);
+        updateRxRms(pcm, 320);
+        playPcm(slot, pcm);
     }
 
     public void playPCM8_16k(int client, byte[] buf, int len) {
@@ -271,12 +285,7 @@ public class AudioEngine {
         }
         byte[] out = short2byte(pcm);
         updateRxRms(out, 640);
-        try {
-            tracks[client].write(out, 0, 640);
-            if (tracks[client].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
-                tracks[client].play();
-            }
-        } catch (Exception ignored) {}
+        playPcm(client, out);
     }
 
     public void playPCM8_8k(int client, byte[] buf, int len) {
@@ -289,12 +298,7 @@ public class AudioEngine {
         }
         byte[] out = short2byte(pcm);
         updateRxRms(out, 320);
-        try {
-            tracks[slot].write(out, 0, 320);
-            if (tracks[slot].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
-                tracks[slot].play();
-            }
-        } catch (Exception ignored) {}
+        playPcm(slot, out);
     }
 
     private static byte[] short2byte(short[] sArr) {
