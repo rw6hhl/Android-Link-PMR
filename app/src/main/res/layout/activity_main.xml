@@ -28,13 +28,13 @@
         android:paddingBottom="20dp" />
 
     <Button
-        android:id="@+id/btnLogs"
+        android:id="@+id/btnUpdateCheck"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:text="@string/settings_log_open"
-        android:backgroundTint="@color/c_blue"
-        android:textColor="@color/c_white"
+        android:text="@string/btn_update_check"
+        android:backgroundTint="@color/c_yellow"
+        android:textColor="@color/c_black"
         android:textSize="22sp"
         android:paddingTop="20dp"
         android:paddingBottom="20dp" />

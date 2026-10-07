@@ -3,27 +3,20 @@ package com.pmr.admin;
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.WindowManager;
 import android.widget.Button;
-import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-import androidx.core.content.FileProvider;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-
-/* Главный экран Android Link PMR V1.7.
+/* Главный экран Android Link PMR V2.1.
  *
- * Изменения V1.7:
- *   - добавлена кнопка «КОММУТАЦИЯ» под НАСТРОЙКИ и ЛОГИ;
- *   - по нажатию открывается картинка GPIO USB Audio CM108.jpg.
+ * Изменения V2.1:
+ *   - кнопка btnLogs заменена на btnUpdateCheck — проверка обновления;
+ *   - обработка нажатия — вызов UpdateChecker.checkAndUpdate().
  */
 public class MainActivity extends AppCompatActivity {
 
@@ -46,11 +39,12 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
-        Button btnLogs = findViewById(R.id.btnLogs);
-        if (btnLogs != null) {
-            btnLogs.setOnClickListener(v -> {
-                Intent i = new Intent(MainActivity.this, LogActivity.class);
-                startActivity(i);
+        Button btnUpdateCheck = findViewById(R.id.btnUpdateCheck);
+        if (btnUpdateCheck != null) {
+            btnUpdateCheck.setOnClickListener(v -> {
+                String version = getString(R.string.app_version);
+                if (version.startsWith("V")) version = version.substring(1);
+                new UpdateChecker(MainActivity.this).checkAndUpdate(version);
             });
         }
 
@@ -64,26 +58,24 @@ public class MainActivity extends AppCompatActivity {
         startServiceSafe();
     }
 
-    /* Открыть картинку GPIO USB Audio CM108.jpg.
-     * Картинка лежит в res/drawable/gpio_usb_audio_cm108.jpg.
-     * Копируем её во временный файл и открываем через Intent.ACTION_VIEW. */
+    /* Открыть картинку GPIO USB Audio CM108.jpg. */
     private void openCommutation() {
         try {
-            File dir = new File(getCacheDir(), "share");
+            java.io.File dir = new java.io.File(getCacheDir(), "share");
             if (!dir.exists()) dir.mkdirs();
-            File out = new File(dir, "gpio_usb_audio_cm108.jpg");
+            java.io.File out = new java.io.File(dir, "gpio_usb_audio_cm108.jpg");
 
-            InputStream is = getResources().openRawResource(
+            java.io.InputStream is = getResources().openRawResource(
                     R.drawable.gpio_usb_audio_cm108);
-            FileOutputStream fos = new FileOutputStream(out);
+            java.io.FileOutputStream fos = new java.io.FileOutputStream(out);
             byte[] buf = new byte[8192];
             int n;
             while ((n = is.read(buf)) > 0) fos.write(buf, 0, n);
             fos.close();
             is.close();
 
-            Uri uri = FileProvider.getUriForFile(this,
-                    getPackageName() + ".fileprovider", out);
+            android.net.Uri uri = androidx.core.content.FileProvider.getUriForFile(
+                    this, getPackageName() + ".fileprovider", out);
 
             Intent i = new Intent(Intent.ACTION_VIEW);
             i.setDataAndType(uri, "image/jpeg");
@@ -91,9 +83,9 @@ public class MainActivity extends AppCompatActivity {
             startActivity(i);
         } catch (Exception e) {
             AppLog.add("openCommutation error: " + e);
-            Toast.makeText(this,
+            android.widget.Toast.makeText(this,
                     "Не удалось открыть файл: " + e.getMessage(),
-                    Toast.LENGTH_LONG).show();
+                    android.widget.Toast.LENGTH_LONG).show();
         }
     }
 

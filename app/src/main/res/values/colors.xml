@@ -8,6 +8,7 @@
     <color name="c_red_dark">#800000</color>
     <color name="c_orange">#C47A00</color>
     <color name="c_orange_dark">#8A5500</color>
+    <color name="c_yellow">#FFC107</color>
     <color name="c_bg">#F5F7FA</color>
     <color name="c_text">#222222</color>
     <color name="c_black">#000000</color>
