@@ -11,12 +11,11 @@ import java.net.InetAddress;
 import java.util.HashSet;
 import java.util.Set;
 
-/* UDP-логика PMR V3.5 (Android Link PMR V2.5.2).
+/* UDP-логика PMR V3.6 (Android Link PMR V3.0.1).
  *
- * Изменения V2.5.2:
- *   - в timerLoop() добавлен вызов PmrService.pttController.retryInitIfNeeded()
- *     — периодическая попытка инициализации CM108 PTT (раз в 2 сек,
- *     внутри защита по времени).
+ * Изменения V3.0.1:
+ *   - убран вызов PmrService.pttController.retryInitIfNeeded() —
+ *     в V3.0 PTT реализован через тон 1000 Гц, а не через CM108.
  *   - остальное — как в V1.9.
  */
 public class PmrSocket {
@@ -231,13 +230,6 @@ public class PmrSocket {
                         + ", running=" + running + ", kanal_PRD=" + kanal_PRD);
                 diag = 0;
             }
-
-            /* Периодический retry init CM108 PTT (раз в 2 сек). */
-            try {
-                if (PmrService.pttController != null) {
-                    PmrService.pttController.retryInitIfNeeded();
-                }
-            } catch (Exception ignored) {}
 
             try { Thread.sleep(100); } catch (InterruptedException ignored) {}
         }
