@@ -11,13 +11,17 @@ import android.media.AudioManager;
 
 import java.util.HashMap;
 
-/* Управление PTT через GPIO3 CM108 (Android Link PMR V2.5.2).
+/* Управление PTT через GPIO3 CM108 (Android Link PMR V2.6).
  *
- * Изменения V2.5.2:
- *   - перед отправкой PTT проверяется, что AudioTrack/активное
- *     устройство вывода — это USB-аудио (CM108). Если да —
- *     PTT отправляется. Если нет — PTT не отправляется.
- *     Это защищает от ложного включения PTT на встроенном динамике.
+ * Изменения V2.6:
+ *   - убран claimInterface — он блокировал USB-устройство;
+ *   - убран releaseInterface;
+ *   - добавлен retryInitIfNeeded() — периодическая попытка init()
+ *     если разрешение появилось после старта службы;
+ *   - возвращена проверка isUsbOutputActive() — PTT включается только
+ *     если активный вывод — USB-аудио (CM108). Защищает от ложного
+ *     включения PTT при выводе на встроенный динамик;
+ *   - подробная диагностика на каждом шаге.
  *
  * Формат команды GPIO3: [0, 0, 4, state ? 4 : 0, 0]
  */
@@ -30,6 +34,7 @@ public class Cm108PttController {
     /* GPIO3: бит 2. */
     private static final int GPIO3_MASK = 1 << 2;   // 4
 
+    /* HID-константы. */
     private static final int USB_TYPE_CLASS = 0x20;
     private static final int USB_RECIP_INTERFACE = 0x01;
     private static final int USB_DIR_OUT = 0x00;
@@ -45,6 +50,10 @@ public class Cm108PttController {
     /* Текущее состояние PTT. */
     private volatile boolean pttActive = false;
 
+    /* Защита от повторных попыток init(). */
+    private long lastRetryTime = 0L;
+    private static final long RETRY_INTERVAL_MS = 2000L;
+
     public Cm108PttController(Context ctx) {
         this.appCtx = ctx;
     }
@@ -52,7 +61,9 @@ public class Cm108PttController {
     public boolean isPttActive() { return pttActive; }
     public boolean isReady()      { return ready; }
 
+    /* Инициализация: поиск CM108, открытие, поиск HID-интерфейса. */
     public void init() {
+        AppLog.add("Cm108Ptt: init() — начало");
         try {
             UsbManager usbManager = (UsbManager) appCtx.getSystemService(
                     Context.USB_SERVICE);
@@ -61,8 +72,14 @@ public class Cm108PttController {
                 return;
             }
             HashMap<String, UsbDevice> devices = usbManager.getDeviceList();
+            AppLog.add("Cm108Ptt: устройств USB найдено " + devices.size());
             UsbDevice target = null;
             for (UsbDevice d : devices.values()) {
+                AppLog.add("Cm108Ptt: USB device VID=0x"
+                        + Integer.toHexString(d.getVendorId())
+                        + ", PID=0x"
+                        + Integer.toHexString(d.getProductId())
+                        + ", name=" + d.getProductName());
                 if (d.getVendorId() == CM108_VID && d.getProductId() == CM108_PID) {
                     target = d;
                     break;
@@ -76,11 +93,18 @@ public class Cm108PttController {
                 AppLog.add("Cm108Ptt: нет разрешения на USB-устройство");
                 return;
             }
+            AppLog.add("Cm108Ptt: разрешение есть, ищем HID-интерфейс");
 
             for (int i = 0; i < target.getInterfaceCount(); i++) {
                 UsbInterface ifc = target.getInterface(i);
+                AppLog.add("Cm108Ptt: интерфейс " + i + ", класс="
+                        + ifc.getInterfaceClass()
+                        + ", subclass=" + ifc.getInterfaceSubclass()
+                        + ", endpoints=" + ifc.getEndpointCount());
                 if (ifc.getInterfaceClass() == UsbConstants.USB_CLASS_HID) {
                     hidInterface = ifc;
+                    AppLog.add("Cm108Ptt: HID-интерфейс найден, id="
+                            + ifc.getId());
                     break;
                 }
             }
@@ -94,22 +118,32 @@ public class Cm108PttController {
                 AppLog.add("Cm108Ptt: openDevice == null");
                 return;
             }
-            if (!connection.claimInterface(hidInterface, true)) {
-                AppLog.add("Cm108Ptt: claimInterface FAIL");
-                connection.close();
-                connection = null;
-                return;
-            }
+            AppLog.add("Cm108Ptt: openDevice OK");
+
+            /* claimInterface УБРАН — он блокировал USB-устройство.
+             * controlTransfer работает без заявки интерфейса. */
+
             ready = true;
-            AppLog.add("Cm108Ptt: готов, HID interface="
-                    + hidInterface.getId());
+            AppLog.add("Cm108Ptt: готов (без claimInterface)");
         } catch (Exception e) {
             AppLog.add("Cm108Ptt: init FAIL — " + e);
             ready = false;
         }
     }
 
-    /* Установить PTT (GPIO3). */
+    /* Периодическая попытка init(), если разрешение появилось позже. */
+    public void retryInitIfNeeded() {
+        if (ready) return;
+        long now = System.currentTimeMillis();
+        if (now - lastRetryTime < RETRY_INTERVAL_MS) return;
+        lastRetryTime = now;
+        AppLog.add("Cm108Ptt: retryInitIfNeeded() — попытка init()");
+        init();
+    }
+
+    /* Установить PTT (GPIO3).
+     * Если on == true — проверяем, что активный вывод — USB.
+     * Если нет — PTT не включаем (защита от ложного PTT на динамике). */
     public void setPtt(boolean on) {
         if (!ready || connection == null || hidInterface == null) {
             pttActive = on;
@@ -126,11 +160,11 @@ public class Cm108PttController {
 
         try {
             byte[] data = new byte[5];
-            data[0] = 0;
-            data[1] = 0;
-            data[2] = (byte) GPIO3_MASK;
-            data[3] = (byte) (on ? GPIO3_MASK : 0);
-            data[4] = 0;
+            data[0] = 0;                            /* report number */
+            data[1] = 0;                            /* reserved */
+            data[2] = (byte) GPIO3_MASK;            /* iomask */
+            data[3] = (byte) (on ? GPIO3_MASK : 0); /* iodata */
+            data[4] = 0;                            /* reserved */
 
             int requestType = USB_DIR_OUT | USB_TYPE_CLASS | USB_RECIP_INTERFACE;
             int result = connection.controlTransfer(
@@ -171,12 +205,10 @@ public class Cm108PttController {
         return false;
     }
 
+    /* Освободить ресурсы. */
     public void release() {
         try {
             if (connection != null) {
-                if (hidInterface != null) {
-                    connection.releaseInterface(hidInterface);
-                }
                 connection.close();
             }
         } catch (Exception ignored) {}

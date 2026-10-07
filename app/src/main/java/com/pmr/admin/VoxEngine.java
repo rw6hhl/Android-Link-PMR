@@ -2,19 +2,17 @@ package com.pmr.admin;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.media.AudioDeviceInfo;
 import android.media.AudioFormat;
-import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 
 /* VOX-движок Android Link PMR V2.5.2.
  *
  * Изменения V2.5.2:
- *   - при наличии USB-микрофона (CM108) AudioRecord создаётся
- *     через AudioRecord.Builder с setPreferredDevice() — 
- *     гарантированное чтение с USB, а не со встроенного микрофона;
- *   - при отсутствии USB-микрофона используется встроенный микрофон;
+ *   - убран setPreferredDevice и AudioRecord.Builder — AudioRecord
+ *     создаётся стандартным конструктором, как в V2.3;
+ *   - Android сам маршрутизирует звук: если CM108 подключена — на неё,
+ *     если нет — на встроенный микрофон;
  *   - heartbeat: при ошибке startRecording() — закрыть и пересоздать
  *     AudioRecord (до 5 попыток с интервалом 2 сек).
  */
@@ -46,7 +44,7 @@ public class VoxEngine {
     private volatile boolean txActive = false;
     private volatile int lastRms = 0;
 
-    /* Максимум RMS за «сеанс» — фиксация пика на 3 сек. */
+    /* Максимум RMS — фиксация пика на 3 сек. */
     private volatile int currentMax = 0;
     private int maxHoldTimer = 0;
 
@@ -91,33 +89,16 @@ public class VoxEngine {
         return false;
     }
 
-    /* Открытие AudioRecord — с явным указанием USB-устройства, если оно есть. */
+    /* Открытие AudioRecord — стандартным конструктором, без setPreferredDevice. */
     private boolean openRecorder() {
         try {
-            /* Ищем USB input device. */
-            AudioDeviceInfo usbInput = findUsbInputDevice();
+            recorder = new AudioRecord(
+                    MediaRecorder.AudioSource.MIC,
+                    SAMPLE_RATE,
+                    AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT,
+                    BUF_SIZE * 2);
 
-            AudioRecord.Builder builder = new AudioRecord.Builder()
-                    .setAudioSource(MediaRecorder.AudioSource.MIC)
-                    .setAudioFormat(new AudioFormat.Builder()
-                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                            .setSampleRate(SAMPLE_RATE)
-                            .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
-                            .build())
-                    .setBufferSizeInBytes(BUF_SIZE * 2);
-
-            recorder = builder.build();
-
-            /* Если USB-микрофон найден — принудительно направить на него. */
-            if (usbInput != null) {
-                boolean ok = recorder.setPreferredDevice(usbInput);
-                AppLog.add("VoxEngine: setPreferredDevice USB (name="
-                        + usbInput.getProductName() + ") → " + ok);
-            } else {
-                AppLog.add("VoxEngine: USB-микрофон не найден, используется встроенный");
-            }
-
-            /* Проверка состояния. */
             if (recorder.getState() != AudioRecord.STATE_INITIALIZED) {
                 AppLog.add("VoxEngine: getState != INITIALIZED");
                 recorder.release();
@@ -126,20 +107,7 @@ public class VoxEngine {
             }
 
             recorder.startRecording();
-
-            /* Логируем фактический маршрут. */
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
-                AudioDeviceInfo routed = recorder.getRoutedDevice();
-                if (routed != null) {
-                    AppLog.add("VoxEngine: routed input type="
-                            + routed.getType() + ", name="
-                            + routed.getProductName());
-                } else {
-                    AppLog.add("VoxEngine: routed input == null");
-                }
-            }
-
-            AppLog.add("VoxEngine: AudioRecord init OK");
+            AppLog.add("VoxEngine: AudioRecord init OK (без setPreferredDevice)");
             return true;
         } catch (Exception e) {
             AppLog.add("VoxEngine: ошибка AudioRecord — " + e);
@@ -159,22 +127,6 @@ public class VoxEngine {
             } catch (Exception ignored) {}
             recorder = null;
         }
-    }
-
-    /* Найти USB-устройство ввода. */
-    private AudioDeviceInfo findUsbInputDevice() {
-        AudioManager am = (AudioManager) appCtx.getSystemService(Context.AUDIO_SERVICE);
-        if (am == null) return null;
-        AudioDeviceInfo[] devs = am.getDevices(AudioManager.GET_DEVICES_INPUTS);
-        for (AudioDeviceInfo d : devs) {
-            int t = d.getType();
-            if (t == AudioDeviceInfo.TYPE_USB_DEVICE
-                    || t == AudioDeviceInfo.TYPE_USB_HEADSET
-                    || t == AudioDeviceInfo.TYPE_USB_ACCESSORY) {
-                return d;
-            }
-        }
-        return null;
     }
 
     /* Обновить пик MAX. */
@@ -204,7 +156,6 @@ public class VoxEngine {
                 read = recorder.read(pcm16, 0, pcm16.length);
             } catch (Exception e) {
                 AppLog.add("VoxEngine: read exception — " + e);
-                /* Пересоздать AudioRecord при ошибке чтения. */
                 closeRecorder();
                 if (!openRecorderSafe()) {
                     AppLog.add("VoxEngine: пересоздание не удалось, поток остановлен");

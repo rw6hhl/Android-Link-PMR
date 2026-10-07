@@ -11,17 +11,13 @@ import java.net.InetAddress;
 import java.util.HashSet;
 import java.util.Set;
 
-/* UDP-логика PMR V3.4 (Android Link PMR V1.9).
+/* UDP-логика PMR V3.5 (Android Link PMR V2.5.2).
  *
- * Изменения V1.9:
- *   - убран второй IP-сервер (IP_SERVER2, serverAddr2);
- *   - убран резервный порт PORT_RESERVE = 16300;
- *   - при приёме голосовых пакетов (19/21/22/25/26/27)
- *     вызывается audioEngine.markRxActivity();
- *   - Priznak_pmr по умолчанию 26005;
- *   - MyPChannel по умолчанию 4;
- *   - PORT_PRD читается из SharedPreferences (KEY_PORT_PRD);
- *   - порт приёма port_prm — из SharedPreferences (KEY_PORT_PRM).
+ * Изменения V2.5.2:
+ *   - в timerLoop() добавлен вызов PmrService.pttController.retryInitIfNeeded()
+ *     — периодическая попытка инициализации CM108 PTT (раз в 2 сек,
+ *     внутри защита по времени).
+ *   - остальное — как в V1.9.
  */
 public class PmrSocket {
 
@@ -235,6 +231,14 @@ public class PmrSocket {
                         + ", running=" + running + ", kanal_PRD=" + kanal_PRD);
                 diag = 0;
             }
+
+            /* Периодический retry init CM108 PTT (раз в 2 сек). */
+            try {
+                if (PmrService.pttController != null) {
+                    PmrService.pttController.retryInitIfNeeded();
+                }
+            } catch (Exception ignored) {}
+
             try { Thread.sleep(100); } catch (InterruptedException ignored) {}
         }
     }
