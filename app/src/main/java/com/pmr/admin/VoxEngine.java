@@ -6,13 +6,13 @@ import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 
-/* VOX-движок Android Link PMR V3.0.
+/* VOX-движок Android Link PMR V4.0-BETA.
  *
- * Изменения V3.0:
- *   - убран setPreferredDevice — USB-аудио не используется;
- *   - используется встроенный микрофон телефона;
- *   - heartbeat сохранён (пересоздание AudioRecord при ошибке);
- *   - алгоритм MAX (фиксация пика на 3 сек) сохранён.
+ * Изменения V4.0-BETA:
+ *   - открытие AudioRecord и ретраи — в отдельном потоке,
+ *     чтобы не блокировать onCreate() и не вызывать ANR;
+ *   - start() возвращает управление немедленно;
+ *   - вся остальная логика (heartbeat, MAX, VOX) сохранена.
  */
 public class VoxEngine {
 
@@ -24,10 +24,8 @@ public class VoxEngine {
     private static final double RMS_DIVISOR = 25.0;
     private static final int VOX_HYSTERESIS = 3;
 
-    /* Таймер удержания пика MAX: 3 секунды = 150 тиков по 20 мс. */
     private static final int MAX_HOLD_TICKS = 150;
 
-    /* Heartbeat: если AudioRecord не открылся — пересоздать. */
     private static final int MAX_INIT_ATTEMPTS = 5;
     private static final long INIT_RETRY_DELAY_MS = 2000L;
 
@@ -42,7 +40,6 @@ public class VoxEngine {
     private volatile boolean txActive = false;
     private volatile int lastRms = 0;
 
-    /* Максимум RMS — фиксация пика на 3 сек. */
     private volatile int currentMax = 0;
     private int maxHoldTimer = 0;
 
@@ -57,14 +54,13 @@ public class VoxEngine {
     public int getLastRms()     { return lastRms; }
     public int getMaxRms3Sec()  { return currentMax; }
 
+    /* Неблокирующий запуск. */
     public void start() {
         if (running) return;
-        if (!openRecorderSafe()) return;
-
         running = true;
-        voxThread = new Thread(this::loop, "vox-loop");
+        voxThread = new Thread(this::threadMain, "vox-thread");
         voxThread.start();
-        AppLog.add("VoxEngine: поток запущен");
+        AppLog.add("VoxEngine: поток запущен (неблокирующий)");
     }
 
     public void stop() {
@@ -74,8 +70,18 @@ public class VoxEngine {
         AppLog.add("VoxEngine: поток остановлен");
     }
 
+    /* Основной метод потока — сначала открыть AudioRecord, потом loop. */
+    private void threadMain() {
+        if (!openRecorderSafe()) {
+            AppLog.add("VoxEngine: не удалось открыть AudioRecord, поток завершён");
+            running = false;
+            return;
+        }
+        loop();
+    }
+
     private boolean openRecorderSafe() {
-        for (int attempt = 1; attempt <= MAX_INIT_ATTEMPTS; attempt++) {
+        for (int attempt = 1; attempt <= MAX_INIT_ATTEMPTS && running; attempt++) {
             if (openRecorder()) return true;
             AppLog.add("VoxEngine: попытка " + attempt + "/"
                     + MAX_INIT_ATTEMPTS + " не удалась, повтор через "
@@ -86,7 +92,6 @@ public class VoxEngine {
         return false;
     }
 
-    /* Открытие AudioRecord — встроенный микрофон. */
     private boolean openRecorder() {
         try {
             recorder = new AudioRecord(
@@ -162,7 +167,7 @@ public class VoxEngine {
             if (read <= 0) {
                 readFailCount++;
                 if (readFailCount > 50) {
-                    AppLog.add("VoxEngine: read() возвращает <=0 постоянно, пересоздание");
+                    AppLog.add("VoxEngine: read() возвращает <=0, пересоздание");
                     closeRecorder();
                     if (!openRecorderSafe()) break;
                     readFailCount = 0;

@@ -16,12 +16,13 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
-/* Экран настроек Android Link PMR V3.0.
+/* Экран настроек Android Link PMR V4.0-BETA.
  *
- * Изменения V3.0:
- *   - добавлено поле ptt_tone_level (уровень тона 1000 Гц, 0..100 %);
- *   - индикатор PTT отражает isRxActive() — приём звука от сервера;
- *   - убрано отображение USB-статуса (внешняя карта не используется).
+ * Изменения V4.0-BETA:
+ *   - добавлено поле ptt_tone_hz (100..3000 Гц);
+ *   - добавлено поле log_email (email для отправки логов);
+ *   - в заголовке показывается версия: "НАСТРОЙКИ V4.0-BETA";
+ *   - убрано поле USB-статуса (внешняя карта не используется).
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -48,8 +49,11 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText voxMicInput;
     private EditText poslePrdInput;
     private EditText pttToneLevelInput;
+    private EditText pttToneHzInput;
+    private EditText logEmailInput;
 
     private VoxView voxView;
+    private TextView settingsTitleText;
     private TextView voxStateText;
     private TextView pttStateText;
     private TextView voxLevelText;
@@ -75,6 +79,8 @@ public class SettingsActivity extends AppCompatActivity {
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_settings);
+
+        settingsTitleText = findViewById(R.id.settingsTitleText);
 
         passCurrent  = findViewById(R.id.passCurrent);
         passNew      = findViewById(R.id.passNew);
@@ -106,7 +112,16 @@ public class SettingsActivity extends AppCompatActivity {
         voxMicInput   = findViewById(R.id.voxMicInput);
         poslePrdInput = findViewById(R.id.poslePrdInput);
         pttToneLevelInput = findViewById(R.id.pttToneLevelInput);
+        pttToneHzInput    = findViewById(R.id.pttToneHzInput);
+        logEmailInput     = findViewById(R.id.logEmailInput);
         btnLockVox = findViewById(R.id.btnLockVox);
+
+        /* Установить заголовок с версией. */
+        if (settingsTitleText != null) {
+            String ver = getString(R.string.app_version);
+            settingsTitleText.setText(getString(R.string.settings_title)
+                    + " " + ver);
+        }
 
         Button saveBtn = findViewById(R.id.btnSaveSettings);
         if (saveBtn != null) saveBtn.setOnClickListener(v -> saveSettings());
@@ -117,7 +132,6 @@ public class SettingsActivity extends AppCompatActivity {
             startActivity(i);
         });
 
-        /* Listener для автосохранения My_Vox при перемещении маркера. */
         if (voxView != null) {
             voxView.setListener(myVox -> {
                 SharedPreferences sp = getSharedPreferences(
@@ -301,6 +315,16 @@ public class SettingsActivity extends AppCompatActivity {
                 PasswordActivity.DEFAULT_PTT_TONE_LEVEL);
         if (pttToneLevelInput != null)
             pttToneLevelInput.setText(String.valueOf(pttToneLevel));
+
+        int pttToneHz = sp.getInt(PasswordActivity.KEY_PTT_TONE_HZ,
+                PasswordActivity.DEFAULT_PTT_TONE_HZ);
+        if (pttToneHzInput != null)
+            pttToneHzInput.setText(String.valueOf(pttToneHz));
+
+        String logEmail = sp.getString(PasswordActivity.KEY_LOG_EMAIL,
+                PasswordActivity.DEFAULT_LOG_EMAIL);
+        if (logEmailInput != null)
+            logEmailInput.setText(logEmail);
     }
 
     private void saveSettings() {
@@ -349,6 +373,22 @@ public class SettingsActivity extends AppCompatActivity {
                 if (v > 100) v = 100;
                 sp.edit().putInt(PasswordActivity.KEY_PTT_TONE_LEVEL, v).apply();
             } catch (NumberFormatException ignored) {}
+        }
+
+        if (pttToneHzInput != null) {
+            try {
+                int v = Integer.parseInt(pttToneHzInput.getText().toString().trim());
+                if (v < 100) v = 100;
+                if (v > 3000) v = 3000;
+                sp.edit().putInt(PasswordActivity.KEY_PTT_TONE_HZ, v).apply();
+            } catch (NumberFormatException ignored) {}
+        }
+
+        if (logEmailInput != null) {
+            String v = logEmailInput.getText().toString().trim();
+            if (!v.isEmpty()) {
+                sp.edit().putString(PasswordActivity.KEY_LOG_EMAIL, v).apply();
+            }
         }
 
         if (etOnUsilMic != null) {

@@ -10,10 +10,12 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран приветствия Android Link PMR V1.9.
+/* Экран приветствия Android Link PMR V4.0-BETA.
  *
- * Изменения V1.9:
- *   - читаем Call и QTH из SharedPreferences и показываем на splash.
+ * Изменения V4.0-BETA:
+ *   - убран переход на CheckActivity — экран проверки системы удалён;
+ *   - переход сразу на PasswordActivity или MainActivity;
+ *   - показываем Call и QTH из SharedPreferences.
  */
 public class SplashActivity extends AppCompatActivity {
 
@@ -27,7 +29,6 @@ public class SplashActivity extends AppCompatActivity {
 
         setContentView(R.layout.activity_splash);
 
-        /* Показать Call / QTH из настроек. */
         SharedPreferences sp = getSharedPreferences(
                 PasswordActivity.PREFS, MODE_PRIVATE);
 
@@ -43,20 +44,14 @@ public class SplashActivity extends AppCompatActivity {
         if (tvQth != null) tvQth.setText("QTH: " + qth);
 
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            boolean checkSystem = sp.getBoolean(
-                    PasswordActivity.KEY_CHECK_SYSTEM, true);
+            boolean requirePass = sp.getBoolean(
+                    PasswordActivity.KEY_REQUIRE_PASSWORD, true);
 
             Intent i;
-            if (checkSystem) {
-                i = new Intent(SplashActivity.this, CheckActivity.class);
+            if (requirePass) {
+                i = new Intent(SplashActivity.this, PasswordActivity.class);
             } else {
-                boolean requirePass = sp.getBoolean(
-                        PasswordActivity.KEY_REQUIRE_PASSWORD, true);
-                if (requirePass) {
-                    i = new Intent(SplashActivity.this, PasswordActivity.class);
-                } else {
-                    i = new Intent(SplashActivity.this, MainActivity.class);
-                }
+                i = new Intent(SplashActivity.this, MainActivity.class);
             }
             startActivity(i);
             finish();

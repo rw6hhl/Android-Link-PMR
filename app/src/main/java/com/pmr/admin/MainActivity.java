@@ -12,11 +12,11 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-/* Главный экран Android Link PMR V3.0.
+/* Главный экран Android Link PMR V4.0-BETA.
  *
- * Изменения V3.0:
- *   - убран запрос USB-разрешения — внешняя звуковая карта не используется;
- *   - PTT — через тон 1000 Гц на левом канале аудиовыхода.
+ * Изменения V4.0-BETA:
+ *   - добавлена 4-я кнопка ОПИСАНИЕ — открывает DescriptionActivity;
+ *   - остальное как в V3.0.
  */
 public class MainActivity extends AppCompatActivity {
 
@@ -45,6 +45,14 @@ public class MainActivity extends AppCompatActivity {
                 String version = getString(R.string.app_version);
                 if (version.startsWith("V")) version = version.substring(1);
                 new UpdateChecker(MainActivity.this).checkAndUpdate(version);
+            });
+        }
+
+        Button btnDescription = findViewById(R.id.btnDescription);
+        if (btnDescription != null) {
+            btnDescription.setOnClickListener(v -> {
+                Intent i = new Intent(MainActivity.this, DescriptionActivity.class);
+                startActivity(i);
             });
         }
 

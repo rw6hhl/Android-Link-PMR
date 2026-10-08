@@ -40,6 +40,18 @@
         android:paddingBottom="20dp" />
 
     <Button
+        android:id="@+id/btnDescription"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="@string/btn_description"
+        android:backgroundTint="@color/c_blue"
+        android:textColor="@color/c_white"
+        android:textSize="22sp"
+        android:paddingTop="20dp"
+        android:paddingBottom="20dp" />
+
+    <Button
         android:id="@+id/btnCommutation"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

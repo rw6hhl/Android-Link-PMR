@@ -14,11 +14,13 @@ import androidx.core.app.NotificationCompat;
 import java.io.File;
 import java.io.InputStream;
 
-/* Foreground Service Android Link PMR V3.0.
+/* Foreground Service Android Link PMR V4.0-BETA.
  *
- * Изменения V3.0:
- *   - убран Cm108PttController — PTT теперь через тон 1000 Гц
- *     на левом канале аудиовыхода (генерируется в AudioEngine).
+ * Изменения V4.0-BETA:
+ *   - тяжёлая инициализация (PmrSocket, AudioEngine, VoxEngine)
+ *     вынесена в отдельный поток, чтобы не блокировать onCreate();
+ *   - startForeground вызывается сразу — Android видит foreground-службу;
+ *   - это устраняет ANR на Android 8.1 (5-10 сек инициализации).
  */
 public class PmrService extends Service {
 
@@ -38,49 +40,60 @@ public class PmrService extends Service {
     public void onCreate() {
         super.onCreate();
 
-        AppLog.add("PmrService.onCreate() — старт V3.0 Android Link PMR");
+        AppLog.add("PmrService.onCreate() — старт V4.0-BETA");
 
-        File dir = getFilesDir();
-        File listTxt = new File(dir, "list.txt");
-
-        listFile  = new ListFile();
-        chanList  = new ChanList();
-        activeLog = new ActiveLog();
-        webLog    = new WebLog();
-        cmdQueue  = new CmdQueue();
-
-        if (!listTxt.exists()) {
-            try {
-                InputStream is = getResources().openRawResource(R.raw.list);
-                listFile.loadFromStream(is);
-                listFile.save(listTxt);
-                is.close();
-                AppLog.add("list.txt распакован из res/raw");
-            } catch (Exception e) {
-                AppLog.add("ошибка распаковки list.txt: " + e);
-            }
-        } else {
-            listFile.load(listTxt);
-            AppLog.add("list.txt загружен (" + listFile.count() + " записей)");
-        }
-
-        pmrSocket = new PmrSocket(getApplicationContext(),
-                listFile, chanList, activeLog, webLog,
-                cmdQueue, dir);
-
-        audioEngine = new AudioEngine(getApplicationContext(), pmrSocket);
-        audioEngine.startPlaying();
-        pmrSocket.setAudioEngine(audioEngine);
-
-        voxEngine = new VoxEngine(getApplicationContext(), pmrSocket);
-        voxEngine.start();
-
-        pmrSocket.start();
-
+        /* 1. Мгновенно поднимаем foreground-уведомление. */
         createChannel();
         startForeground(NOTIF_ID, buildNotification());
 
-        AppLog.add("PmrService: служба запущена, VOX активен, PTT-tone 1000 Гц");
+        /* 2. Тяжёлая инициализация — в отдельном потоке. */
+        new Thread(this::initHeavy, "pmr-init").start();
+    }
+
+    /* Тяжёлая инициализация — не блокирует onCreate. */
+    private void initHeavy() {
+        try {
+            File dir = getFilesDir();
+            File listTxt = new File(dir, "list.txt");
+
+            listFile  = new ListFile();
+            chanList  = new ChanList();
+            activeLog = new ActiveLog();
+            webLog    = new WebLog();
+            cmdQueue  = new CmdQueue();
+
+            if (!listTxt.exists()) {
+                try {
+                    InputStream is = getResources().openRawResource(R.raw.list);
+                    listFile.loadFromStream(is);
+                    listFile.save(listTxt);
+                    is.close();
+                    AppLog.add("list.txt распакован из res/raw");
+                } catch (Exception e) {
+                    AppLog.add("ошибка распаковки list.txt: " + e);
+                }
+            } else {
+                listFile.load(listTxt);
+                AppLog.add("list.txt загружен (" + listFile.count() + " записей)");
+            }
+
+            pmrSocket = new PmrSocket(getApplicationContext(),
+                    listFile, chanList, activeLog, webLog,
+                    cmdQueue, dir);
+
+            audioEngine = new AudioEngine(getApplicationContext(), pmrSocket);
+            audioEngine.startPlaying();
+            pmrSocket.setAudioEngine(audioEngine);
+
+            voxEngine = new VoxEngine(getApplicationContext(), pmrSocket);
+            voxEngine.start();
+
+            pmrSocket.start();
+
+            AppLog.add("PmrService: тяжёлая инициализация завершена");
+        } catch (Exception e) {
+            AppLog.add("PmrService: initHeavy FAIL — " + e);
+        }
     }
 
     @Override

@@ -10,11 +10,18 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран ввода пароля Android Link PMR V3.0.
+/* Экран ввода пароля Android Link PMR V4.0-BETA.
  *
- * Изменения V3.0:
- *   - добавлен KEY_PTT_TONE_LEVEL / DEFAULT_PTT_TONE_LEVEL —
- *     уровень тона PTT 1000 Гц (0..100 %), по умолчанию 50.
+ * Изменения V4.0-BETA:
+ *   - Priznak_pmr = 11111;
+ *   - MyMailIndex = 11111;
+ *   - ip_server = 192.168.0.1;
+ *   - пароль по умолчанию 12345;
+ *   - My_Vox = 1000;
+ *   - onUsilMic = 1, onUsilDin = 1;
+ *   - ptt_tone_level = 0;
+ *   - добавлены KEY_PTT_TONE_HZ (100..3000), KEY_LOG_EMAIL;
+ *   - check_system = false (экран проверки не показывается).
  */
 public class PasswordActivity extends AppCompatActivity {
 
@@ -43,6 +50,12 @@ public class PasswordActivity extends AppCompatActivity {
     /* Уровень PTT-тона (0..100 %). */
     public static final String KEY_PTT_TONE_LEVEL = "ptt_tone_level";
 
+    /* Частота PTT-тона (100..3000 Гц). */
+    public static final String KEY_PTT_TONE_HZ = "ptt_tone_hz";
+
+    /* Email для отправки логов. */
+    public static final String KEY_LOG_EMAIL = "log_email";
+
     /* Усиление микрофона. */
     public static final String KEY_USIL_MIC   = "on_usil_mic";
     public static final String KEY_MIC_USIL   = "mic_usil";
@@ -51,31 +64,37 @@ public class PasswordActivity extends AppCompatActivity {
     public static final String KEY_USIL_DIN   = "on_usil_din";
     public static final String KEY_DIN_USIL   = "din_usil";
 
-    public static final String DEFAULT_PASSWORD = "Rostov2026";
+    public static final String DEFAULT_PASSWORD = "12345";
     public static final int    DEFAULT_REFRESH = 2;
     public static final int    DEFAULT_PORT_PRM = 5354;
     public static final int    DEFAULT_PORT_PRD = 16000;
 
-    public static final String DEFAULT_MY_MAIL_INDEX = "51953";
+    public static final String DEFAULT_MY_MAIL_INDEX = "11111";
     public static final String DEFAULT_MY_PCHANNEL   = "4";
-    public static final String DEFAULT_PRIZNAK_PMR   = "26005";
-    public static final String DEFAULT_IP_SERVER     = "185.221.154.39";
+    public static final String DEFAULT_PRIZNAK_PMR   = "11111";
+    public static final String DEFAULT_IP_SERVER     = "192.168.0.1";
     public static final String DEFAULT_CALLSIGN      = "RW6HHL";
     public static final String DEFAULT_CITY          = "Мин-Воды";
 
-    public static final int     DEFAULT_MY_VOX     = 400;
+    public static final int     DEFAULT_MY_VOX     = 1000;
     public static final int     DEFAULT_VOX_PAUSE  = 30;
     public static final int     DEFAULT_VOX_MIC    = 100;
     public static final int     DEFAULT_POSLE_PRD  = 3;
     public static final boolean DEFAULT_VOX_LOCKED = false;
 
-    /* Уровень тона 1000 Гц: 0..100 %, по умолчанию 50 %. */
-    public static final int     DEFAULT_PTT_TONE_LEVEL = 50;
+    /* Уровень тона: 0 % — тон выключен, 1..100 % — амплитуда. */
+    public static final int     DEFAULT_PTT_TONE_LEVEL = 0;
+
+    /* Частота тона по умолчанию — 1000 Гц. */
+    public static final int     DEFAULT_PTT_TONE_HZ = 1000;
+
+    /* Email для логов по умолчанию. */
+    public static final String  DEFAULT_LOG_EMAIL = "qrz@mail.ru";
 
     /* Усиления: 0 = выключено, 1 = включено. */
-    public static final int    DEFAULT_USIL_MIC = 0;
+    public static final int    DEFAULT_USIL_MIC = 1;
     public static final double DEFAULT_MIC_USIL = 2.0;
-    public static final int    DEFAULT_USIL_DIN = 0;
+    public static final int    DEFAULT_USIL_DIN = 1;
     public static final double DEFAULT_DIN_USIL = 0.4;
 
     private EditText passInput;

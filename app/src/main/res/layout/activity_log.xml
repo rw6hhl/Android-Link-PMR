@@ -3,84 +3,73 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/c_bg">
+    android:background="@color/c_bg"
+    android:padding="12dp">
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="10dp"
         android:text="@string/log_title"
-        android:textColor="@color/c_white"
-        android:textSize="20sp"
+        android:textSize="22sp"
         android:textStyle="bold"
-        android:gravity="center"
-        android:background="@color/c_blue" />
+        android:textColor="@color/c_blue"
+        android:layout_marginBottom="8dp" />
 
     <ScrollView
+        android:id="@+id/logScroll"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:background="@color/c_log_bg">
+        android:background="@color/c_log_bg"
+        android:padding="8dp">
 
         <TextView
             android:id="@+id/logText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:padding="8dp"
-            android:fontFamily="monospace"
             android:textColor="@color/c_log_text"
-            android:textSize="11sp" />
+            android:textSize="12sp"
+            android:typeface="monospace" />
 
     </ScrollView>
-
-    <Button
-        android:id="@+id/btnLogMail"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:text="@string/log_mail"
-        android:backgroundTint="@color/c_blue"
-        android:textColor="@color/c_white"
-        android:textSize="14sp" />
-
-    <Button
-        android:id="@+id/btnLogShare"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:text="@string/log_share"
-        android:backgroundTint="@color/c_green"
-        android:textColor="@color/c_white"
-        android:textSize="14sp" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginTop="4dp"
-        android:layout_marginBottom="4dp">
+        android:layout_marginTop="8dp">
 
         <Button
-            android:id="@+id/btnLogSave"
+            android:id="@+id/btnClear"
             android:layout_width="0dp"
-            android:layout_weight="1"
             android:layout_height="wrap_content"
-            android:text="@string/log_save"
-            android:backgroundTint="@color/c_orange"
-            android:textColor="@color/c_white"
-            android:textSize="14sp" />
-
-        <Button
-            android:id="@+id/btnLogClear"
-            android:layout_width="0dp"
             android:layout_weight="1"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="4dp"
             android:text="@string/log_clear"
             android:backgroundTint="@color/c_red"
             android:textColor="@color/c_white"
             android:textSize="14sp" />
 
+        <Button
+            android:id="@+id/btnShare"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:text="@string/log_share"
+            android:backgroundTint="@color/c_blue"
+            android:textColor="@color/c_white"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/btnMail"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:text="@string/log_mail"
+            android:backgroundTint="@color/c_green"
+            android:textColor="@color/c_white"
+            android:textSize="14sp" />
     </LinearLayout>
 
 </LinearLayout>
