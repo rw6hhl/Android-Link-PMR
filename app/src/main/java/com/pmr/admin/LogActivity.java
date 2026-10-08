@@ -10,9 +10,11 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран логов Android Link PMR V4.0-BETA.
+/* Экран логов Android Link PMR V4.0.1-BETA.
  *
- * Изменения V4.0-BETA:
+ * Изменения V4.0.1-BETA:
+ *   - исправлена ошибка компиляции: AppLog.getAll() → AppLog.dump()
+ *     (в AppLog нет getAll, есть dump — возвращает все строки одной строкой);
  *   - убрана кнопка СОХРАНИТЬ В ФАЙЛ;
  *   - кнопка ОТПРАВИТЬ НА <email> — email из настроек (KEY_LOG_EMAIL);
  *   - кнопка ПОДЕЛИТЬСЯ — через Intent.ACTION_SEND.
@@ -56,7 +58,7 @@ public class LogActivity extends AppCompatActivity {
 
     private void refreshLog() {
         if (logText == null) return;
-        String text = AppLog.getAll();
+        String text = AppLog.dump();
         logText.setText(text);
         if (logScroll != null) {
             logScroll.post(() -> logScroll.fullScroll(ScrollView.FOCUS_DOWN));
@@ -65,7 +67,7 @@ public class LogActivity extends AppCompatActivity {
 
     /* Поделиться логом через общий механизм ACTION_SEND. */
     private void shareLog() {
-        String text = AppLog.getAll();
+        String text = AppLog.dump();
         if (text == null || text.isEmpty()) text = "(лог пуст)";
         Intent i = new Intent(Intent.ACTION_SEND);
         i.setType("text/plain");
@@ -81,7 +83,7 @@ public class LogActivity extends AppCompatActivity {
         String email = sp.getString(PasswordActivity.KEY_LOG_EMAIL,
                 PasswordActivity.DEFAULT_LOG_EMAIL);
 
-        String text = AppLog.getAll();
+        String text = AppLog.dump();
         if (text == null || text.isEmpty()) text = "(лог пуст)";
 
         Intent i = new Intent(Intent.ACTION_SEND);
