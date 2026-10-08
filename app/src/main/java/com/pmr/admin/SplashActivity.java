@@ -10,12 +10,12 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран приветствия Android Link PMR V4.0-BETA.
+/* Экран приветствия Android Link PMR V4.0.1.
  *
- * Изменения V4.0-BETA:
- *   - убран переход на CheckActivity — экран проверки системы удалён;
+ * Изменения V4.0.1:
+ *   - убран переход на CheckActivity (экран проверки системы удалён);
  *   - переход сразу на PasswordActivity или MainActivity;
- *   - показываем Call и QTH из SharedPreferences.
+ *   - splash показывается 5 секунд.
  */
 public class SplashActivity extends AppCompatActivity {
 

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Android Link PMR</string>
-    <string name="app_version">V4.0.1-BETA</string>
+    <string name="app_version">V4.0.1</string>
 
     <string name="password_hint">Пароль</string>
     <string name="password_btn">ВОЙТИ</string>
@@ -12,7 +12,7 @@
     <string name="btn_marker">МАРКЕР</string>
     <string name="btn_description">ОПИСАНИЕ</string>
 
-    <string name="settings_title">НАСТРОЙКИ</string>
+    <string name="settings_title">НАСТРОЙКИ V4.0.1</string>
     <string name="settings_current_pass">Текущий пароль</string>
     <string name="settings_new_pass">Новый пароль</string>
     <string name="settings_confirm_pass">Подтверждение нового пароля</string>
@@ -25,30 +25,18 @@
     <string name="settings_log_open">ОТКРЫТЬ ЛОГИ</string>
     <string name="btn_update_check">ПРОВЕРИТЬ ОБНОВЛЕНИЕ</string>
 
-    <string name="description_title">ОПИСАНИЕ</string>
-    <string name="description_close">ЗАКРЫТЬ</string>
-
     <string name="log_title">ЛОГИ ПРИЛОЖЕНИЯ</string>
     <string name="log_clear">ОЧИСТИТЬ</string>
-    <string name="log_save">СОХРАНИТЬ В ФАЙЛ</string>
     <string name="log_share">ПОДЕЛИТЬСЯ</string>
-    <string name="log_mail">ОТПРАВИТЬ НА EMAIL</string>
-    <string name="log_saved">Лог сохранён</string>
     <string name="log_save_error">Ошибка сохранения</string>
     <string name="log_empty">Лог пуст</string>
 
     <string name="notif_channel">Android Link PMR</string>
     <string name="notif_title">Android Link PMR работает</string>
-    <string name="notif_text">VOX активен, PTT-tone на левом канале</string>
+    <string name="notif_text">VOX активен, PTT-tone</string>
 
-    <string name="check_title">ПРОВЕРКА СИСТЕМЫ</string>
-    <string name="check_server">Сервер PMR</string>
-    <string name="check_password">Пароль</string>
-    <string name="check_continue">ПРОДОЛЖИТЬ</string>
-    <string name="check_available">ДОСТУПЕН</string>
-    <string name="check_unavailable">НЕДОСТУПЕН</string>
-    <string name="check_on">ВКЛЮЧЁН</string>
-    <string name="check_off">ОТКЛЮЧЁН</string>
+    <string name="description_title">ОПИСАНИЕ</string>
+    <string name="description_close">ЗАКРЫТЬ</string>
 
     <string name="toast_26_off">260 отправлено (выключить)</string>
     <string name="toast_26_on">261 отправлено (включить)</string>

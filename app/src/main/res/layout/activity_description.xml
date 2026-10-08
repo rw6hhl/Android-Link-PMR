@@ -12,32 +12,31 @@
         android:text="@string/description_title"
         android:textSize="22sp"
         android:textStyle="bold"
-        android:textColor="@color/c_blue"
-        android:layout_marginBottom="12dp" />
+        android:textColor="@color/c_blue" />
 
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
+        android:layout_marginTop="12dp"
         android:background="@color/c_white"
-        android:padding="8dp">
+        android:padding="12dp">
 
         <TextView
             android:id="@+id/descriptionText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text=""
-            android:textSize="14sp"
+            android:text="Загрузка…"
+            android:textSize="15sp"
             android:textColor="@color/c_black"
-            android:lineSpacingExtra="4dp" />
-
+            android:lineSpacingExtra="2dp" />
     </ScrollView>
 
     <Button
-        android:id="@+id/btnCloseDescription"
+        android:id="@+id/btnDescriptionClose"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="16dp"
         android:text="@string/description_close"
         android:backgroundTint="@color/c_blue"
         android:textColor="@color/c_white"

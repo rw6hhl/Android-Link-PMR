@@ -16,13 +16,11 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
-/* Экран настроек Android Link PMR V4.0-BETA.
+/* Экран настроек Android Link PMR V4.0.1.
  *
- * Изменения V4.0-BETA:
- *   - добавлено поле ptt_tone_hz (100..3000 Гц);
- *   - добавлено поле log_email (email для отправки логов);
- *   - в заголовке показывается версия: "НАСТРОЙКИ V4.0-BETA";
- *   - убрано поле USB-статуса (внешняя карта не используется).
+ * Изменения V4.0.1:
+ *   - добавлены поля ptt_tone_hz (100..3000), rx_gain (0..100), log_email;
+ *   - заголовок экрана — «НАСТРОЙКИ V4.0.1» (из strings.xml).
  */
 public class SettingsActivity extends AppCompatActivity {
 
@@ -39,6 +37,7 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText regPortPrd;
     private EditText regCallsign;
     private EditText regCity;
+    private EditText logEmailInput;
 
     private EditText etOnUsilMic;
     private EditText etMicUsil;
@@ -50,10 +49,9 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText poslePrdInput;
     private EditText pttToneLevelInput;
     private EditText pttToneHzInput;
-    private EditText logEmailInput;
+    private EditText rxGainInput;
 
     private VoxView voxView;
-    private TextView settingsTitleText;
     private TextView voxStateText;
     private TextView pttStateText;
     private TextView voxLevelText;
@@ -80,8 +78,6 @@ public class SettingsActivity extends AppCompatActivity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_settings);
 
-        settingsTitleText = findViewById(R.id.settingsTitleText);
-
         passCurrent  = findViewById(R.id.passCurrent);
         passNew      = findViewById(R.id.passNew);
         passConfirm  = findViewById(R.id.passConfirm);
@@ -95,6 +91,7 @@ public class SettingsActivity extends AppCompatActivity {
         regPortPrd   = findViewById(R.id.regPortPrd);
         regCallsign  = findViewById(R.id.regCallsign);
         regCity      = findViewById(R.id.regCity);
+        logEmailInput = findViewById(R.id.logEmailInput);
 
         etOnUsilMic = findViewById(R.id.etOnUsilMic);
         etMicUsil   = findViewById(R.id.etMicUsil);
@@ -112,16 +109,9 @@ public class SettingsActivity extends AppCompatActivity {
         voxMicInput   = findViewById(R.id.voxMicInput);
         poslePrdInput = findViewById(R.id.poslePrdInput);
         pttToneLevelInput = findViewById(R.id.pttToneLevelInput);
-        pttToneHzInput    = findViewById(R.id.pttToneHzInput);
-        logEmailInput     = findViewById(R.id.logEmailInput);
+        pttToneHzInput = findViewById(R.id.pttToneHzInput);
+        rxGainInput   = findViewById(R.id.rxGainInput);
         btnLockVox = findViewById(R.id.btnLockVox);
-
-        /* Установить заголовок с версией. */
-        if (settingsTitleText != null) {
-            String ver = getString(R.string.app_version);
-            settingsTitleText.setText(getString(R.string.settings_title)
-                    + " " + ver);
-        }
 
         Button saveBtn = findViewById(R.id.btnSaveSettings);
         if (saveBtn != null) saveBtn.setOnClickListener(v -> saveSettings());
@@ -259,6 +249,10 @@ public class SettingsActivity extends AppCompatActivity {
             regCity.setText(sp.getString(
                     PasswordActivity.KEY_CITY,
                     PasswordActivity.DEFAULT_CITY));
+        if (logEmailInput != null)
+            logEmailInput.setText(sp.getString(
+                    PasswordActivity.KEY_LOG_EMAIL,
+                    PasswordActivity.DEFAULT_LOG_EMAIL));
 
         if (etOnUsilMic != null)
             etOnUsilMic.setText(String.valueOf(sp.getInt(
@@ -321,10 +315,10 @@ public class SettingsActivity extends AppCompatActivity {
         if (pttToneHzInput != null)
             pttToneHzInput.setText(String.valueOf(pttToneHz));
 
-        String logEmail = sp.getString(PasswordActivity.KEY_LOG_EMAIL,
-                PasswordActivity.DEFAULT_LOG_EMAIL);
-        if (logEmailInput != null)
-            logEmailInput.setText(logEmail);
+        int rxGain = sp.getInt(PasswordActivity.KEY_RX_GAIN,
+                PasswordActivity.DEFAULT_RX_GAIN);
+        if (rxGainInput != null)
+            rxGainInput.setText(String.valueOf(rxGain));
     }
 
     private void saveSettings() {
@@ -384,11 +378,13 @@ public class SettingsActivity extends AppCompatActivity {
             } catch (NumberFormatException ignored) {}
         }
 
-        if (logEmailInput != null) {
-            String v = logEmailInput.getText().toString().trim();
-            if (!v.isEmpty()) {
-                sp.edit().putString(PasswordActivity.KEY_LOG_EMAIL, v).apply();
-            }
+        if (rxGainInput != null) {
+            try {
+                int v = Integer.parseInt(rxGainInput.getText().toString().trim());
+                if (v < 0) v = 0;
+                if (v > 100) v = 100;
+                sp.edit().putInt(PasswordActivity.KEY_RX_GAIN, v).apply();
+            } catch (NumberFormatException ignored) {}
         }
 
         if (etOnUsilMic != null) {
@@ -460,6 +456,8 @@ public class SettingsActivity extends AppCompatActivity {
                 ? regCallsign.getText().toString().trim() : "";
         String city = (regCity != null)
                 ? regCity.getText().toString().trim() : "";
+        String email = (logEmailInput != null)
+                ? logEmailInput.getText().toString().trim() : "";
 
         if (!myMailIndex.isEmpty()) sp.edit().putString(
                 PasswordActivity.KEY_MY_MAIL_INDEX, myMailIndex).apply();
@@ -473,6 +471,8 @@ public class SettingsActivity extends AppCompatActivity {
                 PasswordActivity.KEY_CALLSIGN, callsign).apply();
         if (!city.isEmpty()) sp.edit().putString(
                 PasswordActivity.KEY_CITY, city).apply();
+        if (!email.isEmpty()) sp.edit().putString(
+                PasswordActivity.KEY_LOG_EMAIL, email).apply();
 
         if (regPortPrm != null) {
             try {

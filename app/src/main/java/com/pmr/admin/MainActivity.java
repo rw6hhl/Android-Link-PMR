@@ -12,10 +12,10 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-/* Главный экран Android Link PMR V4.0-BETA.
+/* Главный экран Android Link PMR V4.0.1.
  *
- * Изменения V4.0-BETA:
- *   - добавлена 4-я кнопка ОПИСАНИЕ — открывает DescriptionActivity;
+ * Изменения V4.0.1:
+ *   - добавлена кнопка btnDescription — открывает экран «ОПИСАНИЕ»;
  *   - остальное как в V3.0.
  */
 public class MainActivity extends AppCompatActivity {
@@ -48,17 +48,17 @@ public class MainActivity extends AppCompatActivity {
             });
         }
 
+        Button btnCommutation = findViewById(R.id.btnCommutation);
+        if (btnCommutation != null) {
+            btnCommutation.setOnClickListener(v -> openCommutation());
+        }
+
         Button btnDescription = findViewById(R.id.btnDescription);
         if (btnDescription != null) {
             btnDescription.setOnClickListener(v -> {
                 Intent i = new Intent(MainActivity.this, DescriptionActivity.class);
                 startActivity(i);
             });
-        }
-
-        Button btnCommutation = findViewById(R.id.btnCommutation);
-        if (btnCommutation != null) {
-            btnCommutation.setOnClickListener(v -> openCommutation());
         }
 
         requestMicPermission();

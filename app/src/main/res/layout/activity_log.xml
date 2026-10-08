@@ -3,41 +3,53 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/c_bg"
-    android:padding="12dp">
+    android:background="@color/c_log_bg"
+    android:padding="8dp">
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/log_title"
-        android:textSize="22sp"
+        android:textColor="@color/c_log_text"
+        android:textSize="18sp"
         android:textStyle="bold"
-        android:textColor="@color/c_blue"
-        android:layout_marginBottom="8dp" />
+        android:padding="4dp" />
 
-    <ScrollView
-        android:id="@+id/logScroll"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:background="@color/c_log_bg"
-        android:padding="8dp">
-
-        <TextView
-            android:id="@+id/logText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="@color/c_log_text"
-            android:textSize="12sp"
-            android:typeface="monospace" />
-
-    </ScrollView>
-
+    <!-- Поле email для отправки лога -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginTop="8dp">
+        android:gravity="center_vertical"
+        android:layout_marginTop="4dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Email:"
+            android:textColor="@color/c_log_text"
+            android:textSize="14sp"
+            android:paddingEnd="8dp" />
+
+        <EditText
+            android:id="@+id/logEmailInput"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:inputType="textEmailAddress"
+            android:textColor="@color/c_log_text"
+            android:textSize="14sp"
+            android:background="@android:drawable/editbox_background"
+            android:padding="6dp"
+            android:singleLine="true" />
+    </LinearLayout>
+
+    <!-- Кнопки: ОЧИСТИТЬ, ПОДЕЛИТЬСЯ, ОТПРАВИТЬ НА EMAIL -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="4dp">
 
         <Button
             android:id="@+id/btnClear"
@@ -45,31 +57,48 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/log_clear"
+            android:textSize="12sp"
             android:backgroundTint="@color/c_red"
             android:textColor="@color/c_white"
-            android:textSize="14sp" />
+            android:layout_marginEnd="4dp" />
 
         <Button
             android:id="@+id/btnShare"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="4dp"
             android:text="@string/log_share"
+            android:textSize="12sp"
             android:backgroundTint="@color/c_blue"
             android:textColor="@color/c_white"
-            android:textSize="14sp" />
+            android:layout_marginEnd="4dp" />
 
         <Button
-            android:id="@+id/btnMail"
+            android:id="@+id/btnSendEmail"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="4dp"
-            android:text="@string/log_mail"
+            android:text="EMAIL"
+            android:textSize="12sp"
             android:backgroundTint="@color/c_green"
-            android:textColor="@color/c_white"
-            android:textSize="14sp" />
+            android:textColor="@color/c_white" />
     </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="4dp"
+        android:background="@color/c_black">
+
+        <TextView
+            android:id="@+id/logText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="6dp"
+            android:textColor="@color/c_log_text"
+            android:textSize="12sp"
+            android:fontFamily="monospace" />
+    </ScrollView>
 
 </LinearLayout>

@@ -10,18 +10,14 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-/* Экран ввода пароля Android Link PMR V4.0-BETA.
+/* Экран ввода пароля Android Link PMR V4.0.1.
  *
- * Изменения V4.0-BETA:
- *   - Priznak_pmr = 11111;
- *   - MyMailIndex = 11111;
- *   - ip_server = 192.168.0.1;
- *   - пароль по умолчанию 12345;
- *   - My_Vox = 1000;
- *   - onUsilMic = 1, onUsilDin = 1;
- *   - ptt_tone_level = 0;
- *   - добавлены KEY_PTT_TONE_HZ (100..3000), KEY_LOG_EMAIL;
- *   - check_system = false (экран проверки не показывается).
+ * Изменения V4.0.1:
+ *   - новые дефолты: Priznak_pmr=11111, MyMailIndex=11111, MyPChannel=4,
+ *     ip_server=192.168.0.1, password=12345;
+ *   - My_Vox=1000, onUsilMic=1, onUsilDin=1, ptt_tone_level=0;
+ *   - новые ключи: KEY_PTT_TONE_HZ, KEY_RX_GAIN, KEY_LOG_EMAIL;
+ *   - удалён KEY_CHECK_SYSTEM — экран проверки системы убран.
  */
 public class PasswordActivity extends AppCompatActivity {
 
@@ -31,7 +27,6 @@ public class PasswordActivity extends AppCompatActivity {
     public static final String KEY_REQUIRE_PASSWORD = "require_password";
     public static final String KEY_PORT_PRM = "port_prm";
     public static final String KEY_PORT_PRD = "port_prd";
-    public static final String KEY_CHECK_SYSTEM = "check_system";
     public static final String KEY_26_STATE = "state_26";
 
     public static final String KEY_MY_MAIL_INDEX = "my_mail_index";
@@ -52,6 +47,9 @@ public class PasswordActivity extends AppCompatActivity {
 
     /* Частота PTT-тона (100..3000 Гц). */
     public static final String KEY_PTT_TONE_HZ = "ptt_tone_hz";
+
+    /* Усиление правого канала (R) — приём (0..100). */
+    public static final String KEY_RX_GAIN = "rx_gain";
 
     /* Email для отправки логов. */
     public static final String KEY_LOG_EMAIL = "log_email";
@@ -82,13 +80,16 @@ public class PasswordActivity extends AppCompatActivity {
     public static final int     DEFAULT_POSLE_PRD  = 3;
     public static final boolean DEFAULT_VOX_LOCKED = false;
 
-    /* Уровень тона: 0 % — тон выключен, 1..100 % — амплитуда. */
+    /* Уровень тона 1000 Гц: 0..100 %, по умолчанию 0 % (пользователь настроит вручную). */
     public static final int     DEFAULT_PTT_TONE_LEVEL = 0;
 
-    /* Частота тона по умолчанию — 1000 Гц. */
+    /* Частота тона: 100..3000 Гц, по умолчанию 1000 Гц. */
     public static final int     DEFAULT_PTT_TONE_HZ = 1000;
 
-    /* Email для логов по умолчанию. */
+    /* Усиление правого канала: 0..100, по умолчанию 50 (1.0x). */
+    public static final int     DEFAULT_RX_GAIN = 50;
+
+    /* Email для логов. */
     public static final String  DEFAULT_LOG_EMAIL = "qrz@mail.ru";
 
     /* Усиления: 0 = выключено, 1 = включено. */

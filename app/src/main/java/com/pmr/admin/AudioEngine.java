@@ -6,15 +6,16 @@ import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
 
-/* Звуковой движок Android Link PMR V4.0-BETA.
+/* Звуковой движок Android Link PMR V4.0.1.
  *
- * Изменения V4.0-BETA:
- *   - ЛЕНИВОЕ создание AudioTrack — на Android 8.1 создание 40 AudioTrack
- *     сразу приводило к ANR (главный поток блокировался на 5-10 сек);
- *   - AudioTrack создаётся при первом play*() для конкретного клиента;
- *   - частота тона PTT — из KEY_PTT_TONE_HZ (100..3000 Гц);
- *   - ptt_tone_level = 0 → тон выключен;
- *   - сохранена СТЕРЕО-логика: R = звук, L = тон 1000 Гц.
+ * Изменения V4.0.1:
+ *   - частота PTT-тона читается из KEY_PTT_TONE_HZ (100..3000 Гц);
+ *   - амплитуда PTT-тона из KEY_PTT_TONE_LEVEL (0..100 %);
+ *   - уровень усиления правого канала (приём) из KEY_RX_GAIN (0..100):
+ *       rx_gain = 50  → 1.0x
+ *       rx_gain = 100 → 2.0x
+ *       rx_gain = 0   → 0 (звук выключен)
+ *   - VOLUME_BOOST = 1.7f оставлен — работает параллельно с rx_gain.
  */
 public class AudioEngine {
 
@@ -38,13 +39,18 @@ public class AudioEngine {
     private final PmrSocket pmrSocket;
     private final G711Ua g711 = new G711Ua();
 
-    private final AudioTrack[] tracks = new AudioTrack[40];
+    private AudioTrack[] tracks = new AudioTrack[40];
     private volatile boolean isPlaying = false;
     private volatile int lastRxRms = 0;
     private volatile long lastRxTime = 0L;
 
-    /* Фаза генератора тона — общая для всех. */
+    /* Фаза генератора тона PTT (в радианах). */
     private double tonePhase = 0.0;
+
+    /* Кеш частоты тона (обновляется раз в 1 сек). */
+    private int cachedToneHz = PasswordActivity.DEFAULT_PTT_TONE_HZ;
+    private long cachedToneHzTime = 0L;
+    private static final long TONE_HZ_CACHE_MS = 1000L;
 
     public AudioEngine(Context ctx, PmrSocket sock) {
         this.appCtx = ctx;
@@ -64,14 +70,50 @@ public class AudioEngine {
     }
 
     public void checkRxTimeout() {
-        /* Ничего — тон гаснет автоматически, когда isRxActive() = false. */
+        /* Тон гаснет автоматически — как только isRxActive() == false. */
     }
 
-    /* Быстрая инициализация — без создания AudioTrack. */
     public void startPlaying() {
         if (isPlaying) return;
+
+        AppLog.add("AudioEngine V4.0.1: старт, стерео-вывод");
+
+        int minSize16 = AudioTrack.getMinBufferSize(SAMPLE_RATE_16K,
+                AudioFormat.CHANNEL_OUT_STEREO,
+                AudioFormat.ENCODING_PCM_16BIT);
+        int minSize8 = AudioTrack.getMinBufferSize(SAMPLE_RATE_8K,
+                AudioFormat.CHANNEL_OUT_STEREO,
+                AudioFormat.ENCODING_PCM_16BIT);
+        AppLog.add("AudioEngine: minBufferSize16=" + minSize16
+                + ", minBufferSize8=" + minSize8);
+
+        for (int i = 0; i < SLOTS_PER_FORMAT; i++) {
+            if (tracks[i] == null) {
+                tracks[i] = new AudioTrack(
+                        AudioManager.STREAM_MUSIC,
+                        SAMPLE_RATE_16K,
+                        AudioFormat.CHANNEL_OUT_STEREO,
+                        AudioFormat.ENCODING_PCM_16BIT,
+                        minSize16 * 2,
+                        AudioTrack.MODE_STREAM);
+                try { tracks[i].setVolume(VOLUME_BOOST); } catch (Exception ignored) {}
+            }
+        }
+        for (int i = OFFSET_8K; i < OFFSET_8K + SLOTS_PER_FORMAT; i++) {
+            if (tracks[i] == null) {
+                tracks[i] = new AudioTrack(
+                        AudioManager.STREAM_MUSIC,
+                        SAMPLE_RATE_8K,
+                        AudioFormat.CHANNEL_OUT_STEREO,
+                        AudioFormat.ENCODING_PCM_16BIT,
+                        minSize8 * 2,
+                        AudioTrack.MODE_STREAM);
+                try { tracks[i].setVolume(VOLUME_BOOST); } catch (Exception ignored) {}
+            }
+        }
         isPlaying = true;
-        AppLog.add("AudioEngine V4.0-BETA: старт, ленивая инициализация");
+        AppLog.add("AudioEngine: startPlaying, volume=" + VOLUME_BOOST
+                + ", slots=" + tracks.length);
     }
 
     public void stopPlaying() {
@@ -88,32 +130,6 @@ public class AudioEngine {
         }
     }
 
-    /* Ленивое создание AudioTrack. */
-    private AudioTrack ensureTrack(int slot, int sampleRate) {
-        if (slot < 0 || slot >= tracks.length) return null;
-        if (tracks[slot] != null) return tracks[slot];
-        try {
-            int minSize = AudioTrack.getMinBufferSize(sampleRate,
-                    AudioFormat.CHANNEL_OUT_STEREO,
-                    AudioFormat.ENCODING_PCM_16BIT);
-            AudioTrack t = new AudioTrack(
-                    AudioManager.STREAM_MUSIC,
-                    sampleRate,
-                    AudioFormat.CHANNEL_OUT_STEREO,
-                    AudioFormat.ENCODING_PCM_16BIT,
-                    minSize * 2,
-                    AudioTrack.MODE_STREAM);
-            try { t.setVolume(VOLUME_BOOST); } catch (Exception ignored) {}
-            tracks[slot] = t;
-            AppLog.add("AudioEngine: создан AudioTrack slot=" + slot
-                    + ", rate=" + sampleRate);
-            return t;
-        } catch (Exception e) {
-            AppLog.add("AudioEngine: ошибка создания AudioTrack — " + e);
-            return null;
-        }
-    }
-
     private boolean isValid16(int client) {
         return client >= 0 && client < SLOTS_PER_FORMAT;
     }
@@ -122,7 +138,6 @@ public class AudioEngine {
         return client >= 0 && client < SLOTS_PER_FORMAT;
     }
 
-    /* Уровень тона PTT (0..100 %). 0 = тон выключен. */
     private int getPttToneLevel() {
         try {
             SharedPreferences sp = appCtx.getSharedPreferences(
@@ -134,8 +149,23 @@ public class AudioEngine {
         }
     }
 
-    /* Частота тона PTT (100..3000 Гц). */
+    private int getRxGain() {
+        try {
+            SharedPreferences sp = appCtx.getSharedPreferences(
+                    PasswordActivity.PREFS, Context.MODE_PRIVATE);
+            return sp.getInt(PasswordActivity.KEY_RX_GAIN,
+                    PasswordActivity.DEFAULT_RX_GAIN);
+        } catch (Exception e) {
+            return PasswordActivity.DEFAULT_RX_GAIN;
+        }
+    }
+
     private int getPttToneHz() {
+        long now = System.currentTimeMillis();
+        if (now - cachedToneHzTime < TONE_HZ_CACHE_MS) {
+            return cachedToneHz;
+        }
+        cachedToneHzTime = now;
         try {
             SharedPreferences sp = appCtx.getSharedPreferences(
                     PasswordActivity.PREFS, Context.MODE_PRIVATE);
@@ -143,39 +173,48 @@ public class AudioEngine {
                     PasswordActivity.DEFAULT_PTT_TONE_HZ);
             if (hz < 100) hz = 100;
             if (hz > 3000) hz = 3000;
-            return hz;
+            cachedToneHz = hz;
         } catch (Exception e) {
-            return PasswordActivity.DEFAULT_PTT_TONE_HZ;
+            cachedToneHz = PasswordActivity.DEFAULT_PTT_TONE_HZ;
         }
+        return cachedToneHz;
     }
 
-    /* Формирование стерео-буфера: R = звук, L = тон PTT. */
     private byte[] buildStereoBuffer(byte[] pcmMono) {
         int n = pcmMono.length / 2;
         byte[] out = new byte[n * 4];
         boolean rxActive = isRxActive();
-        int toneLevel = getPttToneLevel();
-        int toneHz = getPttToneHz();
 
+        int toneLevel = getPttToneLevel();
         if (toneLevel < 0) toneLevel = 0;
         if (toneLevel > 100) toneLevel = 100;
         int toneAmp = (int) (32767.0 * toneLevel / 100.0);
 
-        double dPhase = 2.0 * Math.PI * toneHz / SAMPLE_RATE_16K;
+        int toneHz = getPttToneHz();
+        double toneDPhase = 2.0 * Math.PI * toneHz / SAMPLE_RATE_16K;
+
+        int rxGain = getRxGain();
+        if (rxGain < 0) rxGain = 0;
+        if (rxGain > 100) rxGain = 100;
+        double rxMul = rxGain / 50.0;
 
         for (int i = 0; i < n; i++) {
             short left;
-            if (rxActive && toneLevel > 0) {
+            if (rxActive && toneAmp > 0) {
                 left = (short) (toneAmp * Math.sin(tonePhase));
-                tonePhase += dPhase;
+                tonePhase += toneDPhase;
                 if (tonePhase >= 2.0 * Math.PI) tonePhase -= 2.0 * Math.PI;
             } else {
                 left = 0;
                 tonePhase = 0.0;
             }
 
-            short right = (short) ((pcmMono[i * 2] & 0xFF)
+            short rightRaw = (short) ((pcmMono[i * 2] & 0xFF)
                     | (pcmMono[i * 2 + 1] << 8));
+            int rightAmp = (int) (rightRaw * rxMul);
+            if (rightAmp > 32767) rightAmp = 32767;
+            if (rightAmp < -32768) rightAmp = -32768;
+            short right = (short) rightAmp;
 
             int idx = i * 4;
             out[idx]     = (byte) (left & 0xFF);
@@ -186,15 +225,14 @@ public class AudioEngine {
         return out;
     }
 
-    /* Воспроизведение — с ленивым созданием AudioTrack. */
-    private void playPcm(int slot, int sampleRate, byte[] pcmMono) {
-        AudioTrack t = ensureTrack(slot, sampleRate);
-        if (t == null) return;
+    private void playPcm(int trackSlot, byte[] pcmMono) {
+        if (trackSlot < 0 || trackSlot >= tracks.length) return;
+        if (tracks[trackSlot] == null) return;
         byte[] stereo = buildStereoBuffer(pcmMono);
         try {
-            t.write(stereo, 0, stereo.length);
-            if (t.getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
-                t.play();
+            tracks[trackSlot].write(stereo, 0, stereo.length);
+            if (tracks[trackSlot].getPlayState() != AudioTrack.PLAYSTATE_PLAYING) {
+                tracks[trackSlot].play();
             }
         } catch (Exception ignored) {}
     }
@@ -235,59 +273,65 @@ public class AudioEngine {
 
     public void playG711_16k(int client, byte[] buf, int len) {
         if (!isPlaying || !isValid16(client)) return;
+        if (tracks[client] == null) return;
         byte[] pcm = new byte[640];
         g711.decode(buf, 4, 320, pcm);
         updateRxRms(pcm, 640);
-        playPcm(client, SAMPLE_RATE_16K, pcm);
+        playPcm(client, pcm);
     }
 
     public void playG711_8k(int client, byte[] buf, int len) {
         if (!isPlaying || !isValid8(client)) return;
         int slot = client + OFFSET_8K;
+        if (tracks[slot] == null) return;
         byte[] pcm = new byte[320];
         g711.decode(buf, 4, 160, pcm);
         updateRxRms(pcm, 320);
-        playPcm(slot, SAMPLE_RATE_8K, pcm);
+        playPcm(slot, pcm);
     }
 
     public void playPCM16_16k(int client, byte[] buf, int len) {
         if (!isPlaying || !isValid16(client)) return;
+        if (tracks[client] == null) return;
         byte[] pcm = new byte[640];
         System.arraycopy(buf, 4, pcm, 0, 640);
         updateRxRms(pcm, 640);
-        playPcm(client, SAMPLE_RATE_16K, pcm);
+        playPcm(client, pcm);
     }
 
     public void playPCM16_8k(int client, byte[] buf, int len) {
         if (!isPlaying || !isValid8(client)) return;
         int slot = client + OFFSET_8K;
+        if (tracks[slot] == null) return;
         byte[] pcm = new byte[320];
         System.arraycopy(buf, 4, pcm, 0, 320);
         updateRxRms(pcm, 320);
-        playPcm(slot, SAMPLE_RATE_8K, pcm);
+        playPcm(slot, pcm);
     }
 
     public void playPCM8_16k(int client, byte[] buf, int len) {
         if (!isPlaying || !isValid16(client)) return;
+        if (tracks[client] == null) return;
         short[] pcm = new short[320];
         for (int i = 4; i < 324; i++) {
             pcm[i - 4] = (short) (buf[i] * 256);
         }
         byte[] out = short2byte(pcm);
         updateRxRms(out, 640);
-        playPcm(client, SAMPLE_RATE_16K, out);
+        playPcm(client, out);
     }
 
     public void playPCM8_8k(int client, byte[] buf, int len) {
         if (!isPlaying || !isValid8(client)) return;
         int slot = client + OFFSET_8K;
+        if (tracks[slot] == null) return;
         short[] pcm = new short[160];
         for (int i = 4; i < 164; i++) {
             pcm[i - 4] = (short) (buf[i] * 256);
         }
         byte[] out = short2byte(pcm);
         updateRxRms(out, 320);
-        playPcm(slot, SAMPLE_RATE_8K, out);
+        playPcm(slot, out);
     }
 
     private static byte[] short2byte(short[] sArr) {

@@ -11,7 +11,6 @@
         android:padding="16dp">
 
         <TextView
-            android:id="@+id/settingsTitleText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/settings_title"
@@ -94,7 +93,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="My_Vox=1000"
+                android:text="My_Vox=400"
                 android:textSize="18sp"
                 android:textColor="@color/c_black" />
 
@@ -232,12 +231,46 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:minWidth="180dp"
-                android:text="ptt_tone_hz (Гц)  ="
+                android:text="ptt_tone_hz  ="
                 android:textSize="16sp"
                 android:textColor="@color/c_black" />
 
             <EditText
                 android:id="@+id/pttToneHzInput"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:inputType="number"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <!-- ==================== RX gain ==================== -->
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Громкость приёма (R-канал)"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="180dp"
+                android:text="rx_gain (%)  ="
+                android:textSize="16sp"
+                android:textColor="@color/c_black" />
+
+            <EditText
+                android:id="@+id/rxGainInput"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
@@ -478,7 +511,7 @@
             <TextView android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:minWidth="160dp"
-                android:text="log_email  ="
+                android:text="Email логов  ="
                 android:textSize="16sp"
                 android:textColor="@color/c_black" />
             <EditText android:id="@+id/logEmailInput"
