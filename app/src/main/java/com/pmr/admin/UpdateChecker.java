@@ -36,7 +36,7 @@ import java.net.URL;
 public class UpdateChecker {
 
     public static final String BASE_URL =
-            "https://github.com/rw6hhl/Android-Link-PMR/raw/main/apk/";
+            "https://github.com/rw6hhl/Android-Link-PMR/raw/apk/apk/";
 
     private final Context ctx;
 
