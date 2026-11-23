@@ -2,9 +2,6 @@
 /build/
 /app/build/
 
-# Собранные APK публикуются в отдельную ветку apk, в main не хранятся
-/apk/
-
 # Иде (Android Studio)
 /.idea/
 *.iml
