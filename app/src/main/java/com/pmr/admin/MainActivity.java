@@ -66,15 +66,15 @@ public class MainActivity extends AppCompatActivity {
         startServiceSafe();
     }
 
-    /* Открыть картинку GPIO USB Audio CM108.jpg. */
+    /* Открыть картинку схемы подключения LM567. */
     private void openCommutation() {
         try {
             java.io.File dir = new java.io.File(getCacheDir(), "share");
             if (!dir.exists()) dir.mkdirs();
-            java.io.File out = new java.io.File(dir, "gpio_usb_audio_cm108.jpg");
+            java.io.File out = new java.io.File(dir, "lm567.png");
 
             java.io.InputStream is = getResources().openRawResource(
-                    R.drawable.gpio_usb_audio_cm108);
+                    R.drawable.lm567);
             java.io.FileOutputStream fos = new java.io.FileOutputStream(out);
             byte[] buf = new byte[8192];
             int n;
@@ -86,7 +86,7 @@ public class MainActivity extends AppCompatActivity {
                     this, getPackageName() + ".fileprovider", out);
 
             Intent i = new Intent(Intent.ACTION_VIEW);
-            i.setDataAndType(uri, "image/jpeg");
+            i.setDataAndType(uri, "image/png");
             i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             startActivity(i);
         } catch (Exception e) {

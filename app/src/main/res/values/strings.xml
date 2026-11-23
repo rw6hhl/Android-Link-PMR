@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Android Link PMR</string>
-    <string name="app_version">V4.0.1</string>
+    <string name="app_version">V4.0.2</string>
 
     <string name="password_hint">Пароль</string>
     <string name="password_btn">ВОЙТИ</string>
@@ -12,7 +12,7 @@
     <string name="btn_marker">МАРКЕР</string>
     <string name="btn_description">ОПИСАНИЕ</string>
 
-    <string name="settings_title">НАСТРОЙКИ V4.0.1</string>
+    <string name="settings_title">НАСТРОЙКИ V4.0.2</string>
     <string name="settings_current_pass">Текущий пароль</string>
     <string name="settings_new_pass">Новый пароль</string>
     <string name="settings_confirm_pass">Подтверждение нового пароля</string>
