@@ -41,11 +41,7 @@ public class MainActivity extends AppCompatActivity {
 
         Button btnUpdateCheck = findViewById(R.id.btnUpdateCheck);
         if (btnUpdateCheck != null) {
-            btnUpdateCheck.setOnClickListener(v -> {
-                String version = getString(R.string.app_version);
-                if (version.startsWith("V")) version = version.substring(1);
-                new UpdateChecker(MainActivity.this).checkAndUpdate(version);
-            });
+            btnUpdateCheck.setOnClickListener(v -> openUpdateFolder());
         }
 
         Button btnCommutation = findViewById(R.id.btnCommutation);
@@ -64,6 +60,22 @@ public class MainActivity extends AppCompatActivity {
         requestMicPermission();
         requestNotifPermission();
         startServiceSafe();
+    }
+
+    /* Открыть папку apk/ в репозитории (ветка main) в браузере,
+     * чтобы пользователь сам выбрал нужный APK. */
+    private void openUpdateFolder() {
+        try {
+            Uri uri = Uri.parse(
+                    "https://github.com/rw6hhl/Android-Link-PMR/tree/main/apk");
+            Intent i = new Intent(Intent.ACTION_VIEW, uri);
+            startActivity(i);
+        } catch (Exception e) {
+            AppLog.add("openUpdateFolder error: " + e);
+            android.widget.Toast.makeText(this,
+                    "Не удалось открыть браузер: " + e.getMessage(),
+                    android.widget.Toast.LENGTH_LONG).show();
+        }
     }
 
     /* Открыть картинку схемы подключения LM567. */
