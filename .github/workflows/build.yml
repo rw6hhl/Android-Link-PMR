@@ -43,32 +43,24 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
-      # Публикация APK в отдельную ветку apk (единственный автор — бот).
-      # Так бот больше не коммитит в main и не блокирует push пользователя.
-      - name: Publish APK to apk branch
+      # Публикация APK в папку apk/ ветки main.
+      - name: Publish APK to apk/ folder
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           set -e
+          mkdir -p apk
+          # Имя APK формируется из versionName в build.gradle: app-vX_Y.apk
           APK_SRC=$(ls app/build/outputs/apk/debug/*.apk | head -n 1)
           APK_NAME=$(basename "$APK_SRC")
+          cp "$APK_SRC" "apk/$APK_NAME"
+          printf '%s' "$APK_NAME" > latest.txt
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin apk:refs/remotes/origin/apk || echo "ветки apk ещё нет"
-          rm -rf apk-wt
-          if git rev-parse --verify origin/apk >/dev/null 2>&1; then
-            git worktree add apk-wt origin/apk apk
-          else
-            git checkout --orphan apk
-            git rm -rf --cached . >/dev/null 2>&1 || true
-            git commit --allow-empty -m "init apk branch [skip ci]" -q
-            git push origin apk
-            git checkout main
-            git worktree add apk-wt apk
+          git add "apk/$APK_NAME" latest.txt
+          if git diff --cached --quiet; then
+            echo "APK не изменился, пропускаем commit"
+            exit 0
           fi
-          mkdir -p apk-wt/apk
-          cp "$APK_SRC" "apk-wt/apk/$APK_NAME"
-          printf '%s' "$APK_NAME" > apk-wt/apk/latest.txt
-          git -C apk-wt add -A
-          git -C apk-wt commit -m "Publish $APK_NAME [skip ci]" --allow-empty
-          git -C apk-wt push origin HEAD:apk --force
-          git worktree remove apk-wt --force
+          git commit -m "Publish $APK_NAME [skip ci]"
+          git pull --rebase origin main
+          git push origin main
